@@ -206,12 +206,20 @@
   @media (max-width:640px){
     .app{padding:0 12px 40px}
     header.top{margin:0 -12px; padding:10px 12px; gap:9px 10px}
-    .brand{width:100%; margin-right:0}
+    .brand{margin-right:0}
     .brand b{font-size:15px}
-    .filemeta{order:6; width:100%; font-size:11px}
-    .segmented{order:3}
-    #reloadFolderBtn,#newFileBtn{order:4}
+    .brand span{display:none}
+    .filemeta{display:none}
+    .segmented{order:3; margin-left:auto}
+    .segmented button{padding:6px 10px; font-size:12.5px}
+    .segmented button .c{display:none}
+    #reloadFolderBtn,#newFileBtn{order:4; width:100%}
     .btn{min-height:40px}
+    #newFileBtn{
+      background:var(--surface); border:1px solid var(--line-strong);
+      color:var(--ink-2); text-align:center; font-weight:500;
+    }
+    #newFileBtn:hover{border-color:var(--ink-2); color:var(--ink)}
     .kpis{grid-template-columns:1fr 1fr; row-gap:16px; margin-top:20px}
     .kpi{padding:2px 12px 14px}
     .kpi:nth-child(odd){padding-left:0; border-left:0}
@@ -219,8 +227,9 @@
     .kpi .sub{font-size:11px}
     .quality{font-size:11px; gap:10px}
     .filters{
-      margin-top:18px; position:sticky; z-index:55;
-      top:calc(var(--headerH, 56px) + 8px);
+      margin-top:0; position:sticky; z-index:55;
+      top:var(--headerH, 56px);
+      border-top:0; border-radius:0 0 10px 10px;
     }
     .filters .head{display:none}
     .mfbar{
