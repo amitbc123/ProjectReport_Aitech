@@ -374,10 +374,99 @@
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .filein{position:absolute; left:0; top:0; width:1px; height:1px; opacity:0; overflow:hidden; pointer-events:none}
   label.btn{display:inline-flex; align-items:center; justify-content:center}
+
+  /* ============================================================
+     Page switcher (Project Report / Export Plan)
+     ------------------------------------------------------------
+     Always-visible strip above both pages, independent of file
+     load state. Mobile: the current page name is the tap target.
+     Desktop: a separate button names the other page, next to it.
+     ============================================================ */
+  .pagebar{
+    position:sticky; top:0; z-index:80;
+    display:flex; align-items:center; gap:12px;
+    background:var(--ink); padding:7px 28px;
+  }
+  .pagebar .pagebrand{
+    border:0; background:transparent; color:#fff; cursor:pointer;
+    font-family:var(--font-display); font-weight:600; font-size:12.5px; letter-spacing:.04em;
+    padding:3px 2px;
+  }
+  .pagebar .pageother{
+    border:1px solid rgba(255,255,255,.28); background:transparent; color:rgba(255,255,255,.82);
+    border-radius:20px; padding:4px 13px; font-size:11.5px; font-weight:500; cursor:pointer;
+    white-space:nowrap;
+  }
+  .pagebar .pageother:hover{border-color:var(--gold); color:#fff}
+  @media (min-width:641px){
+    .pagebar .pagebrand{cursor:default; pointer-events:none; opacity:.92}
+  }
+  @media (max-width:640px){
+    .pagebar{padding:7px 12px}
+    .pagebar .pageother{display:none}
+  }
+
+  /* Export Plan's own header sits at a different height than Project
+     Report's, so its sticky filter bar tracks a separate CSS variable
+     (--epHeaderH) instead of the shared --headerH. */
+  #page-export .filters{top:var(--epHeaderH, 56px)}
+  #page-export .filters.mExpanded .fpanel{max-height:calc(100vh - var(--epHeaderH, 56px) - 90px)}
+
+  /* ============================================================
+     Export Plan — grouped line-item cards
+     ------------------------------------------------------------
+     Each card is one export-plan row. A row that lists several
+     P/N + Qty pairs (paired by matching line breaks in the two
+     source cells) shows them nested underneath — distinguishable,
+     but never exploded into unrelated top-level rows.
+     ============================================================ */
+  .eplist{padding:10px 16px 6px}
+  .epcard{
+    border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px;
+    background:var(--surface); transition:border-color .12s; cursor:pointer;
+  }
+  .epcard:hover{border-color:var(--line-strong)}
+  .epcard.mismatch{border-left:3px solid var(--gold)}
+  .epc-head{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap}
+  .epc-proj{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1}
+  .epc-no{font-size:12.5px; color:var(--ink-2)}
+  .epc-name{font-size:13.5px; color:var(--ink); font-weight:500}
+  .epc-inline{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12.5px; margin-top:1px}
+  .epc-inline .epi-pn{color:var(--ink-2)}
+  .epc-right{display:flex; align-items:center; gap:16px; flex:0 0 auto}
+  .epc-date{color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .epc-value{font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .epc-value.neg{color:var(--rose)}
+  .epitems{margin:8px 0 0; border-top:1px dashed var(--line); padding-top:7px; display:flex; flex-direction:column; gap:3px}
+  .epitem{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; padding:2px 0 2px 14px; position:relative}
+  .epitem::before{content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--line-strong)}
+  .epitem .epi-pn{color:var(--ink-2)}
+  .epitem .epi-qty{color:var(--ink); font-variant-numeric:tabular-nums; font-weight:500}
+  .epitem.bad .epi-qty{color:var(--rose)}
+  .epmeta{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:8px; align-items:center}
+  .epchip{background:var(--slate-tint); color:#4E5B6B; border-radius:20px; padding:2px 9px; font-size:11px; font-weight:500}
+  .epc-remarks,.epc-tech,.epc-notes{color:var(--muted); font-size:12px; line-height:1.5; margin-top:4px}
+  .epc-remarks b,.epc-tech b,.epc-notes b{color:var(--ink-2); font-weight:600}
+
+  @media (max-width:640px){
+    .eplist{padding:8px 10px 4px}
+    .epcard{padding:9px 10px}
+    .epc-head{gap:6px}
+    .epc-right{gap:10px; flex-basis:100%; justify-content:space-between; order:2}
+    .epc-proj{flex-basis:100%; order:1}
+    .epc-value{font-size:13px}
+  }
 </style>
 </head>
 <body>
 <div class="app">
+
+  <div class="pagebar" id="pagebar">
+    <button type="button" class="pagebrand" id="pageBrand">Project Report</button>
+    <button type="button" class="pageother" id="pageOtherBtn">Export Plan</button>
+  </div>
+
+  <div id="page-report" class="page" data-page="report">
 
   <header class="top" id="top" hidden>
     <div class="brand"><b>Project Report</b><span>Aitech</span></div>
@@ -508,6 +597,121 @@
 
     <div class="foot">Read-only view · Nothing is written back to the source file · All processing happens on this computer</div>
   </main>
+
+  </div><!-- /#page-report -->
+
+  <div id="page-export" class="page" data-page="export" hidden>
+
+  <header class="top" id="epTop" hidden>
+    <div class="brand"><b>Export Plan</b><span>Aitech</span></div>
+    <div class="filemeta" id="epFilemeta"></div>
+    <div class="segmented" id="epSheetToggle" role="group" aria-label="Worksheet"></div>
+    <label class="btn ghost" id="epNewFileBtn" for="epFileInput">Load another file</label>
+  </header>
+
+  <section class="dropscreen" id="epDropscreen">
+    <div class="dropstack">
+    <div class="dropzone" id="epDropzone">
+      <div class="mark" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>
+        </svg>
+      </div>
+      <h1>Drop the export plan here</h1>
+      <p>Accepts <span class="mono">.xlsx</span> and <span class="mono">.xls</span>.</p>
+      <label class="btn" id="epPickBtn" for="epFileInput">Choose file</label>
+      <input type="file" id="epFileInput" class="filein" accept=".xlsx,.xls">
+      <div class="privacy">
+        The file is read on this computer and never leaves it.<br>
+        Nothing is uploaded, stored, or sent anywhere. This view is read-only.
+      </div>
+      <div id="epDropErr"></div>
+    </div>
+    </div>
+  </section>
+
+  <section class="loading" id="epLoading" hidden>
+    <div class="bar"><i id="epProgBar"></i></div>
+    <div class="loadlabel"><span id="epProgText">Reading file…</span><span id="epProgPct" class="num">0%</span></div>
+    <div class="skgrid"><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div><div class="sk"></div></div>
+    <div class="sk" style="height:110px;margin-bottom:14px"></div>
+    <div class="skrow"><div class="sk"></div><div class="sk"></div></div>
+    <div class="sk" style="height:300px"></div>
+  </section>
+
+  <main id="epDash" hidden>
+
+    <section class="filters" id="epFiltersSection">
+      <div class="head">
+        <div class="eyebrow">Filters</div>
+        <button class="btn ghost" id="epClearAll">Clear all</button>
+      </div>
+      <button type="button" class="mfbar" id="epMfToggle" aria-expanded="false" aria-controls="epFpanel">
+        <span class="mfLabel">Filters</span>
+        <span class="badge" id="epMfCount" hidden>0</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
+      <div class="fpanel" id="epFpanel">
+        <div class="fgrid" id="epFgrid"></div>
+        <div class="chips" id="epChips"></div>
+      </div>
+    </section>
+
+    <section class="kpis" id="epKpis"></section>
+    <div class="rule kpiRule"></div>
+    <div class="quality" id="epQuality"></div>
+
+    <section class="charts">
+      <div class="panel">
+        <div class="ph">
+          <div class="t">
+            <h2>When the value ships</h2>
+            <div class="hint" id="epTlHint"></div>
+          </div>
+          <button class="btn clear" id="epTlClear" hidden></button>
+          <div class="legend">
+            <span><i style="background:var(--slate)"></i>Past</span>
+            <span><i style="background:var(--gold)"></i>Upcoming</span>
+            <span><i style="background:var(--rose)"></i>Credits</span>
+          </div>
+        </div>
+        <div class="tl-scroll" id="epTimeline"></div>
+      </div>
+
+      <div class="row2">
+        <div class="panel">
+          <div class="ph"><div class="t">
+            <h2>Top projects by value</h2>
+            <div class="hint" id="epProjHint">Click a row to filter.</div>
+          </div></div>
+          <div class="rt" id="epByProject"></div>
+        </div>
+        <div class="panel">
+          <div class="ph"><div class="t">
+            <h2>Top P/N by quantity</h2>
+            <div class="hint">Summed across every line item. Click a row to filter.</div>
+          </div></div>
+          <div class="rt" id="epByItem"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel tablewrap">
+      <div class="tbar">
+        <div class="count" id="epRowCount" aria-live="polite"></div>
+        <div class="hint">Each card is one export line. P/Ns that share a line share its date and value.</div>
+      </div>
+      <div id="epList" class="eplist"></div>
+      <div id="epLoadMoreWrap" style="text-align:center;padding:6px 0 16px" hidden>
+        <button class="btn" id="epLoadMore">Show more</button>
+      </div>
+    </section>
+
+    <div class="foot">Read-only view · Nothing is written back to the source file · All processing happens on this computer</div>
+  </main>
+
+  </div><!-- /#page-export -->
+
 </div>
 
 <!-- SheetJS (Apache-2.0) is embedded so .xlsx / .xls can be read without any internet access. -->
@@ -1933,5 +2137,1010 @@ bootstrap();
 
 })();
 </script>
+
+<script>
+/* ============================================================
+   Page router — Project Report / Export Plan
+   ------------------------------------------------------------
+   Purely additive: neither page's own script is touched. This
+   just toggles which page's root element is visible and remembers
+   the choice so a reload reopens the same page.
+   ============================================================ */
+(function(){
+"use strict";
+var PAGE_KEY = "aitech.activePage";
+var pages = { report: document.getElementById("page-report"), export: document.getElementById("page-export") };
+var brand = document.getElementById("pageBrand");
+var otherBtn = document.getElementById("pageOtherBtn");
+var LABEL = { report:"Project Report", export:"Export Plan" };
+
+function current(){
+  var v = null;
+  try{ v = localStorage.getItem(PAGE_KEY); }catch(e){}
+  return v === "export" ? "export" : "report";
+}
+function other(p){ return p === "report" ? "export" : "report"; }
+
+function show(page){
+  pages.report.hidden = page !== "report";
+  pages.export.hidden = page !== "export";
+  brand.textContent = LABEL[page];
+  otherBtn.textContent = LABEL[other(page)];
+  try{ localStorage.setItem(PAGE_KEY, page); }catch(e){}
+}
+function go(page){ show(page); }
+
+brand.addEventListener("click", function(){ go(other(current())); });
+otherBtn.addEventListener("click", function(){ go(other(current())); });
+
+show(current());
+})();
+</script>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   1. Column contract for the Export Plan workbook
+   ------------------------------------------------------------
+   The source (the "Origin" file) carries up to 14 named columns,
+   matched by header text, never by position — same rule as the
+   Project Report parser. Two sheets in the real file ("Old" and
+   "OPEN ISSUE WITH R&D") were exported without a header row at
+   all; those fall back to a fixed, documented column order for
+   that sheet only, so their rows are not silently dropped.
+
+   P/N and Qty. are special: a cell can hold several lines
+   (line-break separated), and the matching line in the sibling
+   cell belongs to it — e.g. P/N line 2 pairs with Qty line 2 of
+   the same row. Every other column (Ship Date, Value, Remarks,
+   Priority, …) applies to the whole row, not to one P/N.
+   ============================================================ */
+var FIELD_ALIASES = {
+  priority:      ["priority"],
+  type:          ["type"],
+  projectNo:     ["project #", "project#", "project no", "project number"],
+  projectName:   ["project #/ name", "project#/ name", "project #/name", "project # / name", "project name"],
+  pn:            ["p/n", "pn"],
+  qty:           ["qty.", "qty", "quantity"],
+  shipDate:      ["ship date"],
+  value:         ["value in us$", "value in usd", "value"],
+  license:       ["exp. license status", "exp license status", "license status"],
+  notes1:        ["notes1", "notes 1"],
+  deliveryRisks: ["delivery risks & dependencies", "delivery risks and dependencies", "notes 2", "notes2"],
+  remarks:       ["remarks"],
+  tech:          ["tech.", "tech"],
+  oven:          ["oven"]
+};
+// Full row order in the current-month sheet, also used as the positional
+// fallback for a header-less sheet that looks like a full export row
+// (12+ populated leading cells) — matches "OPEN ISSUE WITH R&D".
+var FALLBACK_FULL = ["priority","type","projectNo","projectName","pn","qty","shipDate","value","license","notes1","deliveryRisks","remarks","tech","oven"];
+// The "Done" sheet's row order, also used as the positional fallback for
+// the "Old" archive sheet, which carries the same 11 columns with no
+// header row at all.
+var FALLBACK_DONE = ["priority","type","projectNo","projectName","pn","qty","shipDate","value","license","notes1","deliveryRisks"];
+var FIXED_SHEET_ORDER = ["done", "open issue with r&d", "old"];  // everything else ("JUNE 26", "JULY 26", …) sorts first, as "current"
+var BLANK = "(Blank)";
+var ROW_H_HINT = 34;
+var MAX_RANK_ROWS = 500;
+var PAGE_SIZE = 150;
+var TODAY = (function(){ var d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); })();
+
+/* ============================================================
+   2. Formatting + value coercion
+   ------------------------------------------------------------
+   Deliberately duplicated from the Project Report module rather
+   than shared: that module's helpers live inside its own closure,
+   and reaching into it would mean editing working code. These are
+   small, pure functions — the duplication is the safer trade.
+   ============================================================ */
+var nfInt = new Intl.NumberFormat("en-US", { maximumFractionDigits:0 });
+function money(v){
+  var s = "$" + nfInt.format(Math.abs(Math.round(v)));
+  return v < 0 ? "-" + s : s;
+}
+function fmtDate(ms){
+  if (ms == null) return "—";
+  var d = new Date(ms), p = function(n){ return n < 10 ? "0"+n : String(n); };
+  return p(d.getUTCDate()) + "/" + p(d.getUTCMonth()+1) + "/" + d.getUTCFullYear();
+}
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+var NAMED_ENTITIES = { amp:"&", lt:"<", gt:">", quot:'"', apos:"'", nbsp:" " };
+function decodeEntities(s){
+  if (s.indexOf("&") === -1) return s;
+  return s.replace(/&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|([a-zA-Z]+));/g, function(m, dec, hex, name){
+    if (dec) return String.fromCodePoint(parseInt(dec,10));
+    if (hex) return String.fromCodePoint(parseInt(hex,16));
+    return Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, name) ? NAMED_ENTITIES[name] : m;
+  });
+}
+function clean(s){
+  if (s === null || s === undefined) return "";
+  s = decodeEntities(String(s)).replace(/[ ​‎‏]/g, " ");
+  return s.replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").trim();
+}
+function toNumber(raw){
+  if (raw === "" || raw == null) return null;
+  var s = String(raw).replace(/[\s,$]/g, "");
+  var negParen = /^\((.*)\)$/.exec(s);
+  if (negParen) s = "-" + negParen[1];
+  if (s === "" || !/^-?\d*\.?\d+(?:[eE][-+]?\d+)?$/.test(s)) return null;
+  var n = parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+var EXCEL_EPOCH = Date.UTC(1899, 11, 30);
+function toDateMs(raw){
+  if (raw === "" || raw == null) return null;
+  var n = toNumber(raw);
+  if (n != null && n >= 20000 && n <= 60000) return EXCEL_EPOCH + Math.round(n) * 86400000;  // Excel serial, 1954-2064
+  var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw));
+  if (iso) return Date.UTC(+iso[1], +iso[2]-1, +iso[3]);
+  var p = Date.parse(raw);
+  return isNaN(p) ? null : p;
+}
+function normHeader(s){
+  return clean(s).replace(/\n/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+function splitLines(s){
+  if (!s) return [];
+  return s.split("\n").map(clean).filter(function(x){ return x !== ""; });
+}
+
+/* ============================================================
+   3. Header detection + row building
+   ============================================================ */
+function findHeaderMap(aoa){
+  for (var r = 0; r < Math.min(12, aoa.length); r++){
+    var row = aoa[r] || [];
+    var map = {}, hits = 0, hasPN = false, hasProj = false;
+    for (var c = 0; c < row.length; c++){
+      var h = normHeader(row[c]);
+      if (!h) continue;
+      for (var k in FIELD_ALIASES){
+        if (map[k] !== undefined) continue;
+        if (FIELD_ALIASES[k].indexOf(h) !== -1){
+          map[k] = c; hits++;
+          if (k === "pn") hasPN = true;
+          if (k === "projectNo" || k === "projectName") hasProj = true;
+          break;
+        }
+      }
+    }
+    if (hits >= 4 && hasPN && hasProj) return { row:r, map:map };
+  }
+  return null;
+}
+function buildRecord(arr, map, sheetName, rowIdx){
+  function get(key){
+    var idx = map[key];
+    if (idx === undefined) return "";
+    var v = arr[idx];
+    return (v === undefined || v === null) ? "" : clean(String(v));
+  }
+  var projectNo = get("projectNo"), projectName = get("projectName"), pnRaw = get("pn");
+  // Every genuine line carries a Project #. Rows without one are blank
+  // spacers or stray captions living in the data area (the real file has
+  // both — e.g. a "C=Commercial, D=Defense" legend row, or a colour-key
+  // caption that happens to land in the Name/P·N columns) — never real
+  // export lines, so skip them rather than showing a fake "(Blank)" project.
+  if (!projectNo) return null;
+
+  var pnLines = pnRaw ? pnRaw.split("\n").map(clean).filter(function(x){ return x !== ""; }) : [];
+  var qtyRaw = get("qty");
+  var qtyLines = qtyRaw ? qtyRaw.split("\n").map(clean) : [];
+  var items = [], mismatch = false;
+  if (pnLines.length === 0){
+    items = [];
+  } else if (qtyLines.length === pnLines.length){
+    items = pnLines.map(function(pn, i){ return { pn:pn, qty:toNumber(qtyLines[i]) }; });
+  } else if (qtyLines.length === 1 && pnLines.length > 1){
+    var q = toNumber(qtyLines[0]);
+    items = pnLines.map(function(pn){ return { pn:pn, qty:q }; });
+    mismatch = true;
+  } else {
+    // Line counts don't match cleanly. Keep every P/N (never invent or
+    // drop one) and pair what we can — better a visible "—" than a
+    // wrong number quietly attached to the wrong part.
+    items = pnLines.map(function(pn, i){ return { pn:pn, qty: i < qtyLines.length ? toNumber(qtyLines[i]) : null }; });
+    mismatch = true;
+  }
+
+  var value = toNumber(get("value"));
+  var dateRaw = get("shipDate");
+  return {
+    _sheet: sheetName, _row: rowIdx,
+    priority: get("priority"), type: get("type"),
+    projectNo: projectNo, projectName: projectName,
+    items: items, _qtyMismatch: mismatch,
+    shipDate: toDateMs(dateRaw), _noDate: dateRaw === "",
+    value: value == null ? 0 : value, _badValue: value == null && get("value") !== "",
+    license: get("license"), notes1: get("notes1"), deliveryRisks: get("deliveryRisks"),
+    remarks: get("remarks"), techLines: splitLines(get("tech")), oven: get("oven")
+  };
+}
+function parseSheet(ws, name){
+  var aoa = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:"", blankrows:false });
+  if (!aoa.length) return { name:name, rows:[], recognized:true, skippedRaw:0 };
+
+  var h = findHeaderMap(aoa), map, dataStart, recognized = true;
+  if (h){
+    map = h.map; dataStart = h.row + 1;
+  } else {
+    var norm = name.trim().toLowerCase();
+    var fallback = norm === "old" ? FALLBACK_DONE : null;
+    if (!fallback){
+      var probe = aoa[0] || [];
+      var filled = probe.filter(function(v){ return v !== undefined && v !== null && v !== ""; }).length;
+      if (filled >= 8) fallback = FALLBACK_FULL;
+    }
+    if (fallback){
+      map = {}; fallback.forEach(function(k, i){ map[k] = i; });
+      dataStart = 0;
+    } else {
+      recognized = false; map = {}; dataStart = aoa.length;
+    }
+  }
+  var rows = [];
+  for (var r = dataStart; r < aoa.length; r++){
+    var rec = buildRecord(aoa[r] || [], map, name, r);
+    if (rec) rows.push(rec);
+  }
+  return { name:name, rows:rows, recognized:recognized, skippedRaw: recognized ? 0 : aoa.length };
+}
+function parseExportWorkbook(u8){
+  if (typeof XLSX === "undefined") throw new Error("NO_XLSX");
+  var wb = XLSX.read(u8, { type:"array", cellDates:false, cellStyles:false, sheetStubs:true });
+  var all = wb.SheetNames.map(function(n){ return parseSheet(wb.Sheets[n], n); });
+  var unrecognized = all.filter(function(s){ return !s.recognized; }).map(function(s){ return s.name; });
+  var sheets = all.filter(function(s){ return s.recognized; });
+  sheets.sort(function(a, b){
+    var ia = FIXED_SHEET_ORDER.indexOf(a.name.trim().toLowerCase());
+    var ib = FIXED_SHEET_ORDER.indexOf(b.name.trim().toLowerCase());
+    return (ia === -1 ? -1 : ia) - (ib === -1 ? -1 : ib);
+  });
+  if (!sheets.length) throw new Error("NO_SHEETS");
+  return { sheets:sheets, unrecognized:unrecognized };
+}
+
+/* ============================================================
+   4. State
+   ============================================================ */
+var state = {
+  fileName:"", sheets:[], active:0,
+  filters:{}, period:null,
+  filtered:[], facets:{}, totals:null, visibleCount:PAGE_SIZE
+};
+function activeSheet(){ return state.sheets[state.active]; }
+
+var FILTER_COLS = [
+  { key:"projectNo",   label:"Project #" },
+  { key:"projectName", label:"Customer / project" },
+  { key:"pn",           label:"P/N" },
+  { key:"tech",         label:"Tech" },
+  { key:"priority",     label:"Priority" },
+  { key:"type",         label:"Type" },
+  { key:"shipDate",     label:"Ship date" }
+];
+function facetValues(rec, key){
+  if (key === "pn") return rec.items.length ? rec.items.map(function(it){ return it.pn; }) : [BLANK];
+  if (key === "tech") return rec.techLines.length ? rec.techLines : [BLANK];
+  if (key === "shipDate") return [rec.shipDate === null ? BLANK : fmtDate(rec.shipDate)];
+  var v = rec[key];
+  return [v ? v : BLANK];
+}
+function recordMatches(rec, key, selected){
+  var vals = facetValues(rec, key);
+  for (var i = 0; i < vals.length; i++) if (selected.has(vals[i])) return true;
+  return false;
+}
+function anyFilter(){
+  for (var k in state.filters) if (state.filters[k] && state.filters[k].size) return true;
+  return !!state.period;
+}
+function periodOk(rec){
+  if (!state.period) return true;
+  return rec.shipDate !== null && rec.shipDate >= state.period.from && rec.shipDate <= state.period.to;
+}
+function recompute(){
+  var recs = activeSheet().rows;
+  var active = FILTER_COLS.filter(function(c){ return state.filters[c.key] && state.filters[c.key].size; });
+  var facets = {}; FILTER_COLS.forEach(function(c){ facets[c.key] = new Map(); });
+  var out = [];
+  for (var i = 0; i < recs.length; i++){
+    var rec = recs[i], okPeriod = periodOk(rec);
+    var fails = 0, failKey = null;
+    for (var a = 0; a < active.length; a++){
+      if (!recordMatches(rec, active[a].key, state.filters[active[a].key])){
+        fails++; failKey = active[a].key;
+        if (fails > 1) break;
+      }
+    }
+    if (okPeriod && fails === 0) out.push(rec);
+    if (okPeriod && fails <= 1){
+      for (var c = 0; c < FILTER_COLS.length; c++){
+        var key = FILTER_COLS[c].key;
+        if (fails === 1 && key !== failKey) continue;
+        facetValues(rec, key).forEach(function(v){ facets[key].set(v, (facets[key].get(v) || 0) + 1); });
+      }
+    }
+  }
+  out.sort(function(a, b){
+    if (a.shipDate === null && b.shipDate === null) return 0;
+    if (a.shipDate === null) return 1;
+    if (b.shipDate === null) return -1;
+    return a.shipDate - b.shipDate;
+  });
+  state.facets = facets;
+  state.filtered = out;
+}
+
+/* ============================================================
+   5. KPI + quality
+   ============================================================ */
+function totalsOf(recs){
+  var t = { value:0, qty:0, n:recs.length, proj:new Set(), pn:new Set() };
+  recs.forEach(function(r){
+    t.value += r.value;
+    if (r.projectNo) t.proj.add(r.projectNo);
+    r.items.forEach(function(it){ t.qty += it.qty || 0; t.pn.add(it.pn); });
+  });
+  return t;
+}
+function renderKpis(){
+  var f = totalsOf(state.filtered), a = state.totals;
+  var cards = [
+    { lab:"Total value",    val:money(f.value), sub:"of " + money(a.value) + " in this sheet", neg:f.value < 0 },
+    { lab:"Total quantity", val:nfInt.format(f.qty), sub:"of " + nfInt.format(a.qty) + " units in this sheet" },
+    { lab:"Projects",       val:nfInt.format(f.proj.size), sub:"of " + nfInt.format(a.proj.size) + " in this sheet" },
+    { lab:"Distinct P/N",   val:nfInt.format(f.pn.size), sub:"of " + nfInt.format(a.pn.size) + " in this sheet" },
+    { lab:"Rows shown",     val:nfInt.format(f.n), sub:"of " + nfInt.format(a.n) + " rows in this sheet" }
+  ];
+  document.getElementById("epKpis").innerHTML = cards.map(function(c){
+    return '<div class="kpi"><div class="lab">'+c.lab+'</div>'+
+           '<div class="val'+(c.neg?" neg":"")+'">'+esc(c.val)+'</div>'+
+           '<div class="sub">'+esc(c.sub)+'</div></div>';
+  }).join("");
+}
+function renderQuality(){
+  var recs = activeSheet().rows;
+  var noDate = 0, neg = 0, badVal = 0, mismatch = 0, noPn = 0;
+  recs.forEach(function(r){
+    if (r._noDate) noDate++;
+    if (r.value < 0) neg++;
+    if (r._badValue) badVal++;
+    if (r._qtyMismatch) mismatch++;
+    if (!r.items.length) noPn++;
+  });
+  var bits = ['<span><i></i>'+nfInt.format(recs.length)+' rows in this sheet</span>'];
+  if (noDate)   bits.push('<span><i></i>'+nfInt.format(noDate)+' without a shipping date</span>');
+  if (neg)      bits.push('<span><i></i>'+nfInt.format(neg)+' credit rows (negative value)</span>');
+  if (noPn)     bits.push('<span><i class="warn"></i>'+nfInt.format(noPn)+' rows without a P/N</span>');
+  if (mismatch) bits.push('<span><i class="warn"></i>'+nfInt.format(mismatch)+' rows where P/N and Qty. lines could not be paired 1:1 — shown as best effort</span>');
+  if (badVal)   bits.push('<span><i class="warn"></i>'+nfInt.format(badVal)+' values could not be read — counted as 0</span>');
+  document.getElementById("epQuality").innerHTML = bits.join("");
+}
+
+/* ============================================================
+   6. Filter bar (mirrors the Project Report combobox, scoped to
+      this module's own state/elements)
+   ============================================================ */
+var openPop = null;
+function cid(k){ return "ep_" + k.replace(/[^a-z0-9]/gi, "_"); }
+function renderFilterBar(){
+  var g = document.getElementById("epFgrid");
+  g.innerHTML = "";
+  FILTER_COLS.forEach(function(c){
+    var f = document.createElement("div");
+    f.className = "field";
+    f.innerHTML =
+      '<label id="'+cid(c.key)+'">'+esc(c.label)+'</label>'+
+      '<div class="cb" data-cb="'+esc(c.key)+'">'+
+        '<input type="text" placeholder="All" role="combobox" aria-expanded="false" '+
+               'aria-autocomplete="list" aria-labelledby="'+cid(c.key)+'" autocomplete="off">'+
+        '<span class="badge" hidden>0</span><span class="caret">▾</span>'+
+      '</div>'+
+      '<div class="pop" hidden>'+
+        '<div class="popbar"><button type="button" data-act="all">Select all</button>'+
+        '<button type="button" data-act="none">Clear</button></div>'+
+        '<div class="popbody" role="listbox"></div>'+
+      '</div>';
+    g.appendChild(f);
+    wireCombo(f, c);
+  });
+}
+function wireCombo(field, col){
+  var box = field.querySelector(".cb"), input = field.querySelector("input"), pop = field.querySelector(".pop");
+  var body = field.querySelector(".popbody"), btnAll = field.querySelector('[data-act="all"]'), btnNone = field.querySelector('[data-act="none"]');
+  var cursor = -1, lastOpts = [];
+  function options(){
+    var m = state.facets[col.key] || new Map();
+    var q = input.value.trim().toLowerCase();
+    var arr = [];
+    m.forEach(function(n, v){ if (!q || v.toLowerCase().indexOf(q) !== -1) arr.push([v, n]); });
+    var sel = state.filters[col.key];
+    if (sel) sel.forEach(function(v){ if (!m.has(v) && (!q || v.toLowerCase().indexOf(q) !== -1)) arr.push([v, 0]); });
+    arr.sort(function(a, b){ return b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return arr;
+  }
+  function paint(){
+    lastOpts = options();
+    var sel = state.filters[col.key];
+    btnAll.textContent = "Select all" + (lastOpts.length ? " (" + nfInt.format(lastOpts.length) + ")" : "");
+    btnAll.disabled = !lastOpts.length;
+    btnNone.hidden = !(sel && sel.size);
+    if (!lastOpts.length){ body.innerHTML = '<div class="none">No matching values</div>'; return; }
+    body.innerHTML = lastOpts.slice(0, 250).map(function(o, i){
+      var on = sel && sel.has(o[0]);
+      return '<div class="opt'+(o[0]===BLANK?" blank":"")+(i===cursor?" cursor":"")+'" role="option" '+
+             'aria-selected="'+(on?"true":"false")+'" data-v="'+esc(o[0])+'">'+
+             '<span class="tick">✓</span><span class="t">'+esc(o[0])+'</span>'+
+             '<span class="n">'+nfInt.format(o[1])+'</span></div>';
+    }).join("") + (lastOpts.length > 250 ? '<div class="none">'+nfInt.format(lastOpts.length-250)+' more — keep typing to narrow</div>' : "");
+  }
+  function open(){
+    if (openPop && openPop !== pop) openPop.hidden = true;
+    openPop = pop; pop.hidden = false; input.setAttribute("aria-expanded", "true"); paint();
+  }
+  function close(){
+    pop.hidden = true; input.setAttribute("aria-expanded", "false"); cursor = -1;
+    if (openPop === pop) openPop = null;
+  }
+  box.addEventListener("click", function(){ input.focus(); open(); });
+  input.addEventListener("input", function(){ cursor = -1; open(); });
+  input.addEventListener("keydown", function(e){
+    var opts = body.querySelectorAll(".opt");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if (pop.hidden) { open(); return; }
+      cursor += e.key === "ArrowDown" ? 1 : -1;
+      if (cursor < 0) cursor = opts.length - 1;
+      if (cursor >= opts.length) cursor = 0;
+      paint();
+      var el = body.querySelectorAll(".opt")[cursor];
+      if (el) el.scrollIntoView({ block:"nearest" });
+    } else if (e.key === "Enter"){
+      e.preventDefault();
+      var t = opts[cursor < 0 ? 0 : cursor];
+      if (t) toggle(col.key, t.dataset.v);
+    } else if (e.key === "Escape"){ close(); input.blur(); }
+    else if (e.key === "Backspace" && input.value === "" && state.filters[col.key] && state.filters[col.key].size){
+      toggle(col.key, Array.from(state.filters[col.key]).pop());
+    }
+  });
+  body.addEventListener("mousedown", function(e){
+    var o = e.target.closest(".opt");
+    if (!o) return;
+    e.preventDefault();
+    toggle(col.key, o.dataset.v);
+  });
+  btnAll.addEventListener("mousedown", function(e){
+    e.preventDefault();
+    if (!lastOpts.length) return;
+    var s = state.filters[col.key] || new Set();
+    lastOpts.forEach(function(o){ s.add(o[0]); });
+    state.filters[col.key] = s;
+    render();
+  });
+  btnNone.addEventListener("mousedown", function(e){ e.preventDefault(); delete state.filters[col.key]; render(); });
+  input.addEventListener("blur", function(){ setTimeout(function(){ if (!pop.contains(document.activeElement)) close(); }, 120); });
+  field._refresh = function(){
+    var sel = state.filters[col.key], n = sel ? sel.size : 0;
+    var badge = field.querySelector(".badge");
+    badge.hidden = !n; badge.textContent = n;
+    box.classList.toggle("active", !!n);
+    input.placeholder = n ? (n === 1 ? Array.from(sel)[0] : n + " selected") : "";
+    if (!pop.hidden) paint();
+  };
+}
+function toggle(key, value){
+  if (!state.filters[key]) state.filters[key] = new Set();
+  var s = state.filters[key];
+  if (s.has(value)) s.delete(value); else s.add(value);
+  if (!s.size) delete state.filters[key];
+  render();
+}
+function setOnly(key, value){ state.filters[key] = new Set([value]); render(); }
+function renderChips(){
+  var box = document.getElementById("epChips"), out = [];
+  FILTER_COLS.forEach(function(c){
+    var s = state.filters[c.key];
+    if (!s) return;
+    s.forEach(function(v){
+      out.push('<span class="chip"><b>'+esc(c.label)+'</b> '+esc(v)+
+        '<button aria-label="Remove filter" data-k="'+esc(c.key)+'" data-v="'+esc(v)+'">×</button></span>');
+    });
+  });
+  if (state.period) out.push('<span class="chip"><b>Period</b> '+esc(state.period.label)+'<button aria-label="Remove period filter" data-p="1">×</button></span>');
+  box.innerHTML = out.join("");
+  box.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click", function(){
+      if (b.dataset.p) { state.period = null; render(); }
+      else toggle(b.dataset.k, b.dataset.v);
+    });
+  });
+  document.querySelectorAll("#epFgrid .field").forEach(function(f){ if (f._refresh) f._refresh(); });
+  var mfCount = document.getElementById("epMfCount");
+  mfCount.hidden = !out.length; mfCount.textContent = out.length;
+  document.getElementById("epMfToggle").classList.toggle("hasFilters", !!out.length);
+}
+
+/* ============================================================
+   7. Timeline (value by ship period) — same bucketing rules as
+      the Project Report chart, duplicated for the reason in §2.
+   ============================================================ */
+function moneyShort(v){
+  var a = Math.abs(v), s;
+  if (a >= 1e9) s = (a/1e9).toFixed(a>=1e10?0:1) + "B";
+  else if (a >= 1e6) s = (a/1e6).toFixed(a>=1e7?0:1) + "M";
+  else if (a >= 1e3) s = (a/1e3).toFixed(a>=1e4?0:1) + "K";
+  else s = String(Math.round(a));
+  return (v < 0 ? "-$" : "$") + s;
+}
+function bucketize(recs){
+  var months = new Set();
+  recs.forEach(function(r){ if (r.shipDate !== null){ var d = new Date(r.shipDate); months.add(d.getUTCFullYear()+"-"+d.getUTCMonth()); } });
+  var mode = months.size <= 24 ? "month" : (months.size <= 160 ? "quarter" : "year");
+  var map = new Map();
+  recs.forEach(function(r){
+    if (r.shipDate === null) return;
+    var d = new Date(r.shipDate), y = d.getUTCFullYear(), m = d.getUTCMonth(), key, start, end, label;
+    if (mode === "month"){
+      key = y+"-"+String(m+1).padStart(2,"0"); start = Date.UTC(y,m,1); end = Date.UTC(y,m+1,0);
+      label = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m];
+    } else if (mode === "quarter"){
+      var q = Math.floor(m/3); key = y+"-Q"+(q+1); start = Date.UTC(y,q*3,1); end = Date.UTC(y,q*3+3,0); label = "Q"+(q+1);
+    } else { key = String(y); start = Date.UTC(y,0,1); end = Date.UTC(y,11,31); label = ""; }
+    var b = map.get(key);
+    if (!b) { b = { key:key, label:label, year:y, v:0, n:0, start:start, end:end }; map.set(key,b); }
+    b.v += r.value; b.n++;
+  });
+  return { mode:mode, bins:Array.from(map.values()).sort(function(a,b){ return a.start - b.start; }) };
+}
+function niceTicks(min, max){
+  if (min === max) max = min + 1;
+  var span = max - min, step = Math.max(1, Math.pow(10, Math.floor(Math.log10(span/3))));
+  [1,2,2.5,5,10].some(function(m){ if (span/(step*m) <= 4) { step *= m; return true; } return false; });
+  var lo = Math.floor(min/step)*step, hi = Math.ceil(max/step)*step, t = [];
+  for (var v = lo; v <= hi + step*1e-9; v += step) t.push(Math.abs(v) < step*1e-9 ? 0 : v);
+  return t;
+}
+function renderTimeline(){
+  var host = document.getElementById("epTimeline"), tlClear = document.getElementById("epTlClear");
+  tlClear.hidden = !state.period;
+  if (state.period) tlClear.innerHTML = 'Showing <b>'+esc(state.period.label)+'</b> — clear';
+  var res = bucketize(state.filtered), bins = res.bins;
+  document.getElementById("epTlHint").innerHTML = bins.length
+    ? 'Sum of <span class="mono">Value in US$</span> per ' + res.mode + '. Click a bar to filter to that period.'
+    : 'Sum of value per shipping period.';
+  if (!bins.length){
+    host.innerHTML = '<div class="empty"><b>No dated rows</b>Rows without a shipping date stay in the list but cannot be placed on a timeline.</div>';
+    return;
+  }
+  var band = Math.max(38, Math.min(76, Math.floor(1200 / bins.length)));
+  var padL = 62, padR = 16, padT = 14, padB = 44, H = 236;
+  var W = padL + padR + band * bins.length;
+  var vals = bins.map(function(b){ return b.v; });
+  var lo = Math.min(0, Math.min.apply(null, vals)), hi = Math.max(0, Math.max.apply(null, vals));
+  if (hi === lo) hi = lo + 1;
+  var ticks = niceTicks(lo, hi);
+  lo = ticks[0]; hi = ticks[ticks.length-1];
+  var plotH = H - padT - padB;
+  var y = function(v){ return padT + (hi - v) / (hi - lo) * plotH; };
+  var zero = y(0), lastYear = null;
+  var s = ['<svg width="'+W+'" height="'+H+'" role="img" aria-label="Value by shipping period">'];
+  ticks.forEach(function(t){
+    var yy = y(t);
+    s.push('<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+yy+'" y2="'+yy+'" stroke="'+(t===0?"#CFD5DD":"#EEF0F3")+'"/>');
+    s.push('<text x="'+(padL-10)+'" y="'+(yy+4)+'" text-anchor="end" font-size="10.5" fill="#98A1AC">'+moneyShort(t)+'</text>');
+  });
+  bins.forEach(function(b, i){
+    var x = padL + i*band;
+    var col = b.v < 0 ? "var(--rose)" : (b.end >= TODAY ? "var(--gold)" : "var(--slate)");
+    var top = b.v >= 0 ? y(b.v) : zero;
+    var h = Math.max(1.5, Math.abs(y(b.v) - zero));
+    var bw = Math.min(30, band - 12);
+    s.push('<g class="tl-band" tabindex="0" role="button" data-i="'+i+'" aria-label="'+esc(b.key)+', '+money(b.v)+', '+b.n+' rows">');
+    s.push('<title>'+esc(b.key)+' · '+money(b.v)+' · '+nfInt.format(b.n)+' rows</title>');
+    s.push('<rect class="tl-hit" x="'+x+'" y="'+padT+'" width="'+band+'" height="'+plotH+'" fill="transparent"/>');
+    s.push('<rect x="'+(x + (band-bw)/2)+'" y="'+top+'" width="'+bw+'" height="'+h+'" rx="1.5" fill="'+col+'"/>');
+    s.push('</g>');
+    if (res.mode !== "year") s.push('<text x="'+(x+band/2)+'" y="'+(H-24)+'" text-anchor="middle" font-size="10" fill="#6A7381">'+b.label+'</text>');
+    if (b.year !== lastYear){
+      s.push('<text x="'+(x+band/2)+'" y="'+(H-9)+'" text-anchor="middle" font-size="10.5" fill="#12161C" font-weight="600">'+b.year+'</text>');
+      lastYear = b.year;
+    }
+  });
+  var idx = bins.findIndex(function(b){ return b.end >= TODAY; });
+  if (idx > 0){
+    var mx = padL + idx*band;
+    s.push('<line x1="'+mx+'" x2="'+mx+'" y1="'+(padT-6)+'" y2="'+(padT+plotH)+'" stroke="#A97D18" stroke-dasharray="2 3"/>');
+    s.push('<text x="'+(mx+5)+'" y="'+(padT-1)+'" font-size="9.5" fill="#A97D18" letter-spacing="1">TODAY</text>');
+  }
+  s.push('<line x1="'+padL+'" x2="'+(W-padR)+'" y1="'+zero+'" y2="'+zero+'" stroke="#CFD5DD"/>');
+  s.push("</svg>");
+  host.innerHTML = s.join("");
+  host.querySelectorAll(".tl-band").forEach(function(g){
+    function apply(){ var b = bins[+g.dataset.i]; state.period = { from:b.start, to:b.end, label:b.key }; render(); }
+    g.addEventListener("click", apply);
+    g.addEventListener("keydown", function(e){ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); apply(); } });
+  });
+  if (idx > 0) host.scrollLeft = Math.max(0, padL + idx*band - host.clientWidth * 0.55);
+}
+
+/* ============================================================
+   8. Ranked panels
+   ============================================================ */
+function emptyBlock(host){ host.innerHTML = '<div class="empty"><b>Nothing to rank</b>No rows match the current filters.</div>'; }
+function head(tpl, labels, rights){
+  return '<div class="rth" style="grid-template-columns:'+tpl+'">' +
+    labels.map(function(h,i){ return '<div'+(rights[i]?' style="text-align:right"':'')+'>'+h+'</div>'; }).join("") + '</div>';
+}
+function moreNote(total){
+  return total > MAX_RANK_ROWS ? '<div class="rtmore">Showing the top '+nfInt.format(MAX_RANK_ROWS)+' of '+nfInt.format(total)+'. Use the filters to narrow.</div>' : "";
+}
+function wireRows(host, onPick){
+  host.querySelectorAll(".rrow[data-v]").forEach(function(r){
+    function go(){ onPick(r.dataset.v); }
+    r.addEventListener("click", go);
+    r.addEventListener("keydown", function(e){ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  });
+}
+var TPL_PROJ = "minmax(74px,.9fr) minmax(94px,1.45fr) 72px 106px";
+var TPL_PN   = "minmax(120px,1.6fr) 72px 60px";
+
+function groupByProject(recs){
+  var m = new Map();
+  recs.forEach(function(r){
+    var k = r.projectNo || BLANK;
+    var g = m.get(k);
+    if (!g){ g = { k:k, value:0, qty:0, n:0, name:new Map() }; m.set(k, g); }
+    g.value += r.value; g.n++;
+    r.items.forEach(function(it){ g.qty += it.qty || 0; });
+    if (r.projectName) g.name.set(r.projectName, (g.name.get(r.projectName)||0)+1);
+  });
+  return Array.from(m.values()).sort(function(a,b){ return Math.abs(b.value) - Math.abs(a.value); });
+}
+function dominant(map, cls){
+  if (!map.size) return '<span class="'+cls+'">—</span>';
+  var best = null, bn = -1;
+  map.forEach(function(n,v){ if (n > bn){ bn = n; best = v; } });
+  var extra = map.size > 1 ? ' +'+(map.size-1) : "";
+  return '<span class="'+cls+'" title="'+esc(Array.from(map.keys()).join(", "))+'">'+esc(best)+extra+'</span>';
+}
+function renderByProject(recs){
+  var host = document.getElementById("epByProject");
+  if (!recs.length) return emptyBlock(host);
+  var groups = groupByProject(recs);
+  var scale = Math.max.apply(null, groups.slice(0, MAX_RANK_ROWS).map(function(g){ return Math.abs(g.value); }).concat([1]));
+  var html = '<div class="rtscroll">' + head(TPL_PROJ, ["Project","Customer","Qty","Value"], [0,0,1,1]);
+  html += groups.slice(0, MAX_RANK_ROWS).map(function(g, i){
+    var w = Math.abs(g.value) / scale * 100;
+    return '<div class="rrow" role="button" tabindex="0" data-v="'+esc(g.k)+'" style="grid-template-columns:'+TPL_PROJ+'" title="'+esc(g.k)+' · '+nfInt.format(g.n)+' rows">'+
+      '<span class="bg'+(g.value<0?" neg":"")+'" style="width:'+w+'%;animation-delay:'+(Math.min(i,20)*22)+'ms"></span>'+
+      '<span class="lab mono">'+esc(g.k)+'</span>'+ dominant(g.name, "cust") +
+      '<span class="r">'+nfInt.format(g.qty)+'</span>'+
+      '<span class="v'+(g.value<0?" neg":"")+'">'+money(g.value)+'</span>'+
+    '</div>';
+  }).join("") + moreNote(groups.length) + '</div>';
+  host.innerHTML = html;
+  wireRows(host, function(v){ setOnly("projectNo", v); });
+}
+function groupByPN(recs){
+  var m = new Map();
+  recs.forEach(function(r){
+    r.items.forEach(function(it){
+      var k = it.pn || BLANK, g = m.get(k);
+      if (!g){ g = { k:k, qty:0, n:0 }; m.set(k, g); }
+      g.qty += it.qty || 0; g.n++;
+    });
+  });
+  return Array.from(m.values()).sort(function(a,b){ return b.qty - a.qty; });
+}
+function renderByPN(recs){
+  var host = document.getElementById("epByItem");
+  var groups = groupByPN(recs);
+  if (!groups.length) return emptyBlock(host);
+  var scale = Math.max.apply(null, groups.slice(0, MAX_RANK_ROWS).map(function(g){ return g.qty; }).concat([1]));
+  var html = '<div class="rtscroll">' + head(TPL_PN, ["P/N","Qty","Lines"], [0,1,1]);
+  html += groups.slice(0, MAX_RANK_ROWS).map(function(g, i){
+    var w = Math.abs(g.qty) / scale * 100;
+    return '<div class="rrow" role="button" tabindex="0" data-v="'+esc(g.k)+'" style="grid-template-columns:'+TPL_PN+'" title="'+esc(g.k)+'">'+
+      '<span class="bg" style="width:'+w+'%;animation-delay:'+(Math.min(i,20)*22)+'ms"></span>'+
+      '<span class="lab mono">'+esc(g.k)+'</span>'+
+      '<span class="v">'+nfInt.format(g.qty)+'</span>'+
+      '<span class="r">'+nfInt.format(g.n)+'</span>'+
+    '</div>';
+  }).join("") + moreNote(groups.length) + '</div>';
+  host.innerHTML = html;
+  wireRows(host, function(v){ setOnly("pn", v); });
+}
+
+/* ============================================================
+   9. The grouped line-item list
+   ------------------------------------------------------------
+   One card per source row. A row with a single P/N shows it
+   inline; a row with several (paired P/N + Qty lines) nests
+   them beneath, distinguishable but still visibly one row.
+   ============================================================ */
+function renderCard(rec){
+  var single = rec.items.length <= 1;
+  var head_ =
+    '<div class="epc-head">' +
+      '<div class="epc-proj">' +
+        '<span class="epc-no mono">'+esc(rec.projectNo || "—")+'</span>' +
+        '<span class="epc-name">'+esc(rec.projectName || "—")+'</span>' +
+        (single ? '<span class="epc-inline"><span class="epi-pn mono">'+esc(rec.items[0] ? rec.items[0].pn : "—")+'</span>'+
+          (rec.items[0] ? '<span>· Qty '+(rec.items[0].qty==null?"—":nfInt.format(rec.items[0].qty))+'</span>' : '') +
+          '</span>' : '') +
+      '</div>' +
+      '<div class="epc-right">' +
+        '<span class="epc-date">'+(rec.shipDate===null?"—":fmtDate(rec.shipDate))+'</span>' +
+        '<span class="epc-value'+(rec.value<0?" neg":"")+'">'+money(rec.value)+'</span>' +
+      '</div>' +
+    '</div>';
+  var items = !single ? '<div class="epitems">' + rec.items.map(function(it){
+      return '<div class="epitem'+(it.qty==null?" bad":"")+'"><span class="epi-pn mono">'+esc(it.pn)+'</span><span class="epi-qty">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span></div>';
+    }).join("") + '</div>' : "";
+  var chips = [];
+  if (rec.priority) chips.push('<span class="epchip">Priority '+esc(rec.priority)+'</span>');
+  if (rec.type) chips.push('<span class="epchip">Type '+esc(rec.type)+'</span>');
+  if (rec.license) chips.push('<span class="epchip">License '+esc(rec.license)+'</span>');
+  if (rec.oven) chips.push('<span class="epchip">Oven '+esc(rec.oven)+'</span>');
+  if (rec.techLines.length) chips.push('<span class="epchip">Tech: '+esc(rec.techLines.join(", "))+'</span>');
+  var metaLines = [];
+  if (rec.remarks) metaLines.push('<div class="epc-remarks"><b>Remarks</b> '+esc(rec.remarks)+'</div>');
+  if (rec.notes1) metaLines.push('<div class="epc-notes"><b>Notes</b> '+esc(rec.notes1)+'</div>');
+  if (rec.deliveryRisks) metaLines.push('<div class="epc-notes"><b>Delivery risk</b> '+esc(rec.deliveryRisks)+'</div>');
+  var meta = chips.length ? '<div class="epmeta">'+chips.join("")+'</div>' : "";
+  return '<div class="epcard'+(rec._qtyMismatch?" mismatch":"")+'" data-proj="'+esc(rec.projectNo)+'" tabindex="0" role="button">' +
+    head_ + items + meta + metaLines.join("") + '</div>';
+}
+function renderList(){
+  var host = document.getElementById("epList"), moreWrap = document.getElementById("epLoadMoreWrap");
+  var data = state.filtered;
+  if (!data.length){
+    host.innerHTML = '<div class="empty" style="padding:52px 16px"><b>No rows match</b>Remove a filter, or clear them all, to see data again.</div>';
+    moreWrap.hidden = true;
+    return;
+  }
+  var slice = data.slice(0, state.visibleCount);
+  host.innerHTML = slice.map(renderCard).join("");
+  host.querySelectorAll(".epcard[data-proj]").forEach(function(el){
+    function go(){ if (el.dataset.proj) setOnly("projectNo", el.dataset.proj); }
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", function(e){ if (e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } });
+  });
+  moreWrap.hidden = state.visibleCount >= data.length;
+}
+function renderCount(){
+  var t = activeSheet().rows.length, f = state.filtered.length;
+  document.getElementById("epRowCount").innerHTML =
+    "Showing <b>" + nfInt.format(f) + "</b> of " + nfInt.format(t) + " rows" + (anyFilter() ? "" : " (unfiltered)");
+}
+
+/* ============================================================
+   10. Master render + sheet switching
+   ============================================================ */
+function render(){
+  recompute();
+  state.visibleCount = PAGE_SIZE;
+  renderKpis();
+  renderChips();
+  renderTimeline();
+  renderByProject(state.filtered);
+  renderByPN(state.filtered);
+  renderCount();
+  renderList();
+}
+function switchSheet(i){
+  state.active = i;
+  state.filters = {}; state.period = null; state.visibleCount = PAGE_SIZE;
+  state.totals = totalsOf(activeSheet().rows);
+  renderSheetToggle();
+  renderQuality();
+  render();
+}
+function renderSheetToggle(){
+  var t = document.getElementById("epSheetToggle");
+  t.innerHTML = state.sheets.map(function(s, i){
+    return '<button aria-pressed="'+(i===state.active)+'" data-i="'+i+'">'+esc(s.name)+'<span class="c">'+nfInt.format(s.rows.length)+'</span></button>';
+  }).join("");
+  t.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click", function(){ if (+b.dataset.i !== state.active) switchSheet(+b.dataset.i); });
+  });
+}
+
+/* ============================================================
+   11. File intake
+   ============================================================ */
+var epDropscreen = document.getElementById("epDropscreen");
+var epLoading    = document.getElementById("epLoading");
+var epDash       = document.getElementById("epDash");
+var epTopbar     = document.getElementById("epTop");
+var epDz         = document.getElementById("epDropzone");
+var epErrBox     = document.getElementById("epDropErr");
+var epHadData    = false;
+
+function epShowError(kind, extra){
+  var msg;
+  if (kind === "NO_SHEETS") msg = "<b>No usable worksheets found.</b><br>Expected at least one sheet with <span class='mono'>Project #</span> and <span class='mono'>P/N</span> columns.";
+  else if (kind === "NO_XLSX") msg = "<b>Excel reader unavailable.</b><br>Try reloading the page.";
+  else msg = "<b>Could not read the file.</b><br>"+esc(String(extra || ""));
+  epLoading.hidden = true;
+  if (epHadData){ epDash.hidden = false; epTopbar.hidden = false; epDropscreen.hidden = true; epToast(msg); }
+  else { epErrBox.innerHTML = '<div class="err">'+msg+'</div>'; epDropscreen.hidden = false; }
+}
+function epToast(msg, kind){
+  var old = document.getElementById("toast");
+  if (old) old.remove();
+  var t = document.createElement("div");
+  t.id = "toast";
+  var cls = kind === "info" ? "tmsg" : "err";
+  t.innerHTML = '<div class="'+cls+'" style="margin:0">'+msg+'</div><button class="btn ghost" aria-label="Dismiss">Dismiss</button>';
+  document.body.appendChild(t);
+  t.querySelector("button").addEventListener("click", function(){ t.remove(); });
+}
+function epSetProgress(p, label){
+  document.getElementById("epProgBar").style.width = Math.round(p*100) + "%";
+  document.getElementById("epProgPct").textContent = Math.round(p*100) + "%";
+  if (label) document.getElementById("epProgText").textContent = label;
+}
+function epInstall(file, parsed){
+  state.fileName = file.name;
+  state.sheets = parsed.sheets;
+  epSetProgress(1, "Building the dashboard…");
+  setTimeout(function(){
+    epHadData = true;
+    epDropscreen.hidden = true; epLoading.hidden = true;
+    epDash.hidden = false; epTopbar.hidden = false;
+    document.getElementById("epFilemeta").innerHTML =
+      '<span class="mono">'+esc(file.name)+'</span><span class="dot"></span>'+
+      nfInt.format(parsed.sheets.reduce(function(s,x){ return s + x.rows.length; },0))+' rows<span class="dot"></span><span>read-only</span>';
+    renderFilterBar();
+    switchSheet(0);
+    epCacheFile(file);
+    if (parsed.unrecognized.length){
+      epToast('<b>'+nfInt.format(parsed.unrecognized.length)+' sheet'+(parsed.unrecognized.length>1?"s":"")+'</b> could not be read (no recognisable header): '+parsed.unrecognized.map(esc).join(", ")+'.', "info");
+    }
+  }, 30);
+}
+function epHandleFile(file){
+  if (!file) return;
+  epErrBox.innerHTML = "";
+  epDropscreen.hidden = true; epDash.hidden = true; epTopbar.hidden = true;
+  epLoading.hidden = false;
+  epSetProgress(0, "Reading " + file.name + "…");
+
+  var fr = new FileReader();
+  fr.onprogress = function(e){ if (e.lengthComputable) epSetProgress(e.loaded/e.total * 0.35); };
+  fr.onerror = function(){ epShowError("READ", "The file could not be opened."); };
+  fr.onload = function(){
+    var u8 = new Uint8Array(fr.result);
+    epSetProgress(0.4, "Reading the Excel workbook…");
+    setTimeout(function(){
+      try { epInstall(file, parseExportWorkbook(u8)); }
+      catch (err){ epShowError(err.message, err.message); }
+    }, 40);
+  };
+  fr.readAsArrayBuffer(file);
+}
+
+var epFileInput = document.getElementById("epFileInput");
+epFileInput.addEventListener("click", function(){ this.value = ""; });
+epFileInput.addEventListener("change", function(e){ if (e.target.files[0]) epHandleFile(e.target.files[0]); });
+document.getElementById("epClearAll").addEventListener("click", function(){ state.filters = {}; state.period = null; render(); });
+document.getElementById("epTlClear").addEventListener("click", function(){ state.period = null; render(); });
+
+["dragenter","dragover"].forEach(function(ev){ epDz.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); epDz.classList.add("over"); }); });
+["dragleave"].forEach(function(ev){ epDz.addEventListener(ev, function(e){ e.preventDefault(); epDz.classList.remove("over"); }); });
+epDz.addEventListener("drop", function(e){
+  e.preventDefault(); e.stopPropagation();
+  epDz.classList.remove("over");
+  var f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) epHandleFile(f);
+});
+// The Project Report module has its own unconditional window-level drop
+// handler (dropping anywhere loads a file into it). That listener runs in
+// the bubble phase, so intercepting drops here in the capture phase —
+// only while this page is the active one — stops a drop meant for Export
+// Plan from also being force-fed into the other, hidden page.
+function epPageActive(){ var p = document.getElementById("page-export"); return p && !p.hidden; }
+window.addEventListener("drop", function(e){
+  if (!epPageActive()) return;
+  e.preventDefault(); e.stopPropagation();
+  var f = e.dataTransfer && e.dataTransfer.files[0];
+  if (f) epHandleFile(f);
+}, true);
+
+/* ---------- mobile filter bar ---------- */
+var epFiltersSection = document.getElementById("epFiltersSection");
+var epMfToggle = document.getElementById("epMfToggle");
+epMfToggle.addEventListener("click", function(){
+  var open = !epFiltersSection.classList.contains("mExpanded");
+  epFiltersSection.classList.toggle("mExpanded", open);
+  epMfToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", function(e){
+  if (epFiltersSection.classList.contains("mExpanded") && !e.target.closest("#epFiltersSection")) {
+    epFiltersSection.classList.remove("mExpanded");
+    epMfToggle.setAttribute("aria-expanded", "false");
+  }
+  if (openPop && !e.target.closest(".field")) { openPop.hidden = true; openPop = null; }
+});
+document.getElementById("epLoadMore").addEventListener("click", function(){
+  state.visibleCount += PAGE_SIZE;
+  renderList();
+});
+
+function epSyncHeaderHeight(){
+  document.documentElement.style.setProperty("--epHeaderH", epTopbar.offsetHeight + "px");
+}
+new ResizeObserver(epSyncHeaderHeight).observe(epTopbar);
+window.addEventListener("resize", epSyncHeaderHeight);
+epSyncHeaderHeight();
+
+/* ============================================================
+   12. Remember the last file — IndexedDB, works on iPhone too.
+   ------------------------------------------------------------
+   Shares the "aitech-report" database and "files" object store
+   that the Project Report page already creates, but under its
+   own key, so the two pages never overwrite each other's file.
+   No folder auto-load here: unlike the daily report, the export
+   plan has no fixed network path, so this only restores the last
+   file a person picked by hand.
+   ============================================================ */
+var IDB_NAME = "aitech-report", IDB_FILES = "files", IDB_FILEKEY = "lastFileExportPlan";
+function idbOpen(){
+  return new Promise(function(res, rej){
+    if (!window.indexedDB) return rej();
+    var rq = indexedDB.open(IDB_NAME, 2);
+    rq.onupgradeneeded = function(){
+      var db = rq.result;
+      if (!db.objectStoreNames.contains("handles")) db.createObjectStore("handles");
+      if (!db.objectStoreNames.contains(IDB_FILES)) db.createObjectStore(IDB_FILES);
+    };
+    rq.onsuccess = function(){ res(rq.result); };
+    rq.onerror = function(){ rej(); };
+  });
+}
+function epCacheFile(file){
+  idbOpen().then(function(db){
+    try{
+      var tx = db.transaction(IDB_FILES, "readwrite");
+      tx.objectStore(IDB_FILES).put({ name:file.name, ts:Date.now(), blob:file }, IDB_FILEKEY);
+    }catch(e){}
+  }).catch(function(){});
+}
+function epRestoreCached(rec){
+  var f;
+  try{ f = new File([rec.blob], rec.name || "export-plan.xlsx", { type:(rec.blob && rec.blob.type) || "" }); }
+  catch(e){ f = rec.blob; try{ f.name = rec.name; }catch(_){} }
+  epToast('Showing the last file you loaded' + (rec.name ? ' (<b>'+esc(rec.name)+'</b>)' : '') +
+        (rec.ts ? ', saved '+new Date(rec.ts).toLocaleString() : '') +
+        '. Tap <b>Choose file</b> to load a newer one.', "info");
+  epHandleFile(f);
+}
+function epBootstrap(){
+  idbOpen().then(function(db){
+    return new Promise(function(res){
+      try{
+        var rq = db.transaction(IDB_FILES, "readonly").objectStore(IDB_FILES).get(IDB_FILEKEY);
+        rq.onsuccess = function(){ res(rq.result || null); };
+        rq.onerror = function(){ res(null); };
+      }catch(e){ res(null); }
+    });
+  }).catch(function(){ return null; }).then(function(rec){
+    if (rec) epRestoreCached(rec);
+  });
+}
+epBootstrap();
+
+})();
+</script>
 </body>
 </html>
+

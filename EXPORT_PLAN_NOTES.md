@@ -1,0 +1,474 @@
+# Export Plan — design notes
+
+This file exists for whoever (human or AI) touches this repo next. It explains
+how the whole app is put together, in enough depth that you shouldn't need to
+re-read the entire `index.html` from scratch, and it documents *why* the
+Export Plan feature was built the way it was — including a few non-obvious
+decisions and one real bug that was found and fixed while building it.
+
+The repo is a single file: `index.html`. No build step, no bundler, no
+`node_modules`. SheetJS (`xlsx.js`, Apache-2.0) is pasted in verbatim inside
+one `<script>` block so `.xlsx`/`.xls` files can be read with zero network
+access. Everything else — CSS, markup, both dashboards' logic — lives in
+that one file. Keep it that way unless there's a strong reason not to.
+
+## 1. How the existing "Project Report" page works
+
+This section is a map of the code that was already here, for context. It was
+**not modified** by the Export Plan work beyond being wrapped in a new
+`<div id="page-report">` container (see §3) — every id, class and function
+inside it is untouched.
+
+- **Source format**: a daily export from another system, either
+  `ProjReport_D_M_YYYY.xml` (Microsoft "SpreadsheetML 2003" format — an XML
+  dialect, *not* a real `.xlsx`) or a real `.xlsx`/`.xls` with the same two
+  sheet names and columns. The app sniffs the first bytes (`PK` → zip →
+  xlsx, `D0 CF 11` → legacy xls, otherwise treated as SpreadsheetML text) and
+  picks a parser accordingly. The XML path is a **hand-rolled streaming
+  parser** (`findWorksheets` / `parseRow` / `nextRow`, section 4 of the
+  script) — deliberately not `DOMParser`, because the real files are tens of
+  MB and building a full DOM for them was measured to be too slow. It yields
+  to the event loop every ~24ms (`performance.now()` budget in `step()`) so
+  the tab doesn't freeze on a 30+ MB file.
+- **Column contract** (`COLS`, section 1): a fixed list of 11 columns,
+  matched **by header text, never by position**. If any expected header is
+  missing from a sheet, the whole file is rejected with a `MISSING_COLS`
+  error naming the sheet and the missing headers. This "fail loudly, matched
+  by name" philosophy is the single most important convention in this
+  codebase and the Export Plan module follows it too.
+- **Two sheets**: `"Open Projects Report"` and `"Closed Projects Report"`
+  (`SHEET_ORDER`), shown as a segmented toggle in the header.
+- **State + render**: one global `state` object (filters, sort, active
+  sheet, filtered rows) and one `render()` that recomputes everything
+  top-to-bottom (KPIs → chips → timeline → ranked panels → status chart →
+  table). Filtering (`recompute()`) is a single pass that also derives
+  cross-filtered facet counts (a value's count reflects every *other* active
+  filter, not itself — that's the "fails <= 1" trick in `recompute`).
+- **Table virtualization**: the bottom table (`paintRows`) is a manually
+  windowed grid — `position:absolute` rows inside a tall spacer div, only
+  the visible slice + overscan is rendered on scroll. Fine for a flat,
+  uniform-height table; Export Plan's grouped cards have variable height, so
+  it uses simple "Show more" pagination instead (see §5).
+- **"Remember the last file"**, two layers:
+  1. **Folder auto-load** (desktop Chrome/Edge only, `showDirectoryPicker`):
+     the user grants access to a fixed network folder once; the handle is
+     persisted in IndexedDB (`aitech-report` DB, `handles` store, key
+     `"dailyFolder"`) and re-used on later visits (subject to the browser
+     re-confirming permission). The app then picks the newest
+     `ProjReport_D_M_YYYY.xml` in that folder itself, skipping any filename
+     containing "india".
+  2. **Cached file fallback** (works everywhere, including iPhone Safari,
+     which has no File System Access API): every successfully loaded file
+     is stored as a `File`/`Blob` in IndexedDB (`aitech-report` DB, `files`
+     store, key `"lastFile"`). On boot, if the folder path didn't already
+     load something, the cached file is restored and a toast tells the user
+     it's showing a saved copy.
+- **Responsive design**: almost entirely class-based CSS (`@media
+  (max-width:640px)`), not separate markup — the same `.kpis`, `.filters`,
+  `.rt` etc. elements just re-flow. The one JS/CSS bridge is the
+  `--headerH` custom property, kept in sync with the sticky header's real
+  height via a `ResizeObserver` (`syncHeaderHeight`), and used by the mobile
+  filter drawer to size itself under the header. This detail mattered for
+  Export Plan — see §4.
+
+## 2. The two sample files and what they actually are
+
+Two workbooks were provided during development:
+
+- **`06 Export Plan_Origin.xlsx`** — the file that gets uploaded to the
+  site. This is the real export, with every column the source system
+  produces.
+- **`06 Export Plan_Final.xlsx`** — *not* a second upload format. It is the
+  same workbook with the "JUNE 26" (current month) sheet's columns trimmed
+  down to the ones the user actually cares about looking at
+  (`Project #`, `Project #/ Name`, `P/N`, `Qty.`, `Ship Date`,
+  `Value in US$`, `Remarks`, `Tech.`). The other three sheets (`Done`,
+  `OPEN ISSUE WITH R&D`, `Old`) were left with their full original column
+  set in both files. In other words, "Final" is a spec of *which columns
+  matter*, not a second file format the app needs to parse.
+
+Conclusion baked into the parser: **only one upload format exists** (the
+Origin layout), and the column contract should be a superset covering every
+field seen across all four sheets, matched by header name — exactly the
+`COLS`-by-name philosophy from the Project Report module, just applied to a
+richer, per-sheet-varying schema (see §4.1).
+
+Both sample files live nowhere in the repo (they were only attached to the
+conversation) — if you need to re-test against them, ask the user to
+re-attach them.
+
+## 3. Two pages, one shell — the page switcher
+
+**Requirement**: on mobile, tapping the "Project Report" title switches to
+Export Plan; on desktop, a separate button for the other type sits next to
+the title.
+
+**Design**: a small, self-contained router (`<script>` block, ~30 lines,
+right after the pasted SheetJS library) that does nothing but toggle which
+of two top-level containers is visible:
+
+```html
+<div class="app">
+  <div class="pagebar" id="pagebar"> ... </div>       <!-- new, always visible -->
+  <div id="page-report" class="page" data-page="report">  <!-- existing markup, untouched, just wrapped -->
+    <header id="top" hidden> ... </header>
+    ...
+  </div>
+  <div id="page-export" class="page" data-page="export" hidden>  <!-- new -->
+    <header id="epTop" hidden> ... </header>
+    ...
+  </div>
+</div>
+```
+
+Why a *new*, always-visible bar instead of reusing the existing `#top`
+header for the switcher: `#top` is `hidden` until a file loads (by original
+design — the empty drop screen is deliberately bare). The switcher needs to
+work *before* a file is loaded too, on either page, so it had to live
+outside that hide/show cycle. It's intentionally slim (a thin dark strip)
+so it doesn't look like a second, competing brand header once a file *is*
+loaded and `#top`/`#epTop` become visible underneath it.
+
+Behavior split by viewport, per the request:
+- **Mobile** (`≤640px`): `.pageother` button is hidden via CSS; `.pagebrand`
+  (showing the *current* page's name) is the tap target.
+- **Desktop** (`>640px`): `.pagebrand` becomes inert (`pointer-events:none`,
+  just a label) and `.pageother` — labelled with the *other* page's name —
+  is the clickable control next to it.
+
+Both buttons call the same `go(other(current()))`, so the CSS is the only
+thing that decides which one is reachable at a given width.
+
+The last-used page is remembered in `localStorage["aitech.activePage"]` so
+a reload reopens the same page. This wasn't explicitly requested but was a
+one-line addition matching the general "remember where I left off" theme,
+and it makes switching feel instant since both pages restore their own
+cached file in the background regardless of which one is currently shown
+(see §6) — flip to the other page and its dashboard is often already there.
+
+### Two things that needed care to avoid cross-page bugs
+
+1. **`--headerH` CSS variable collision.** The mobile filter drawer's sticky
+   offset and max-height both read a custom property
+   (`.filters{top:var(--headerH,56px)}`) that Project Report's own script
+   sets on `documentElement` from its header's real height. If Export Plan
+   reused the same variable name, whichever page's `ResizeObserver` fired
+   *last* would clobber it for both — including setting it to effectively 0
+   when the *other* page's header is `display:none`. Fix: Export Plan uses
+   its own variable, `--epHeaderH`, wired through a more specific selector
+   (`#page-export .filters{ top:var(--epHeaderH,56px) }`) that overrides the
+   generic `.filters` rule only inside its own container. Zero shared state,
+   zero edits to the original module.
+
+2. **The global window `drop` handler.** The Project Report module has:
+   ```js
+   window.addEventListener("drop", function(e){ ...; handleFile(f); });
+   ```
+   registered unconditionally, in the bubble phase. If you're on the Export
+   Plan page and drop a file *anywhere* on the page, this existing listener
+   would still fire and silently feed your file into the (hidden) Project
+   Report page's state — very confusing to debug later. Rather than touch
+   that listener, Export Plan adds its own `drop` listener on `window` in
+   the **capture phase** (`addEventListener("drop", fn, true)`), guarded by
+   "is the export page currently the active one". Capture fires before
+   bubble, so when it applies it calls `stopPropagation()` and the original
+   bubble-phase handler never runs. When Project Report is active, the guard
+   is false and behavior is 100% as before. `epDropzone`'s own drop handler
+   also calls `stopPropagation()` for the same reason (so a drop that lands
+   exactly on the dropzone doesn't double-fire).
+
+## 4. Export Plan: parsing engine
+
+Lives in its own IIFE, after the router script. Deliberately duplicates a
+handful of small pure helpers from the Project Report module (`esc`,
+`clean`, `toNumber`, `money`, `fmtDate`, Excel-serial date math, entity
+decoding) rather than hoisting them into shared scope. The alternative would
+have meant editing the working module to expose internals — duplication of
+~40 lines of pure functions was judged the lower-risk trade given the
+explicit instruction not to disturb what already works.
+
+### 4.1 Column contract, by name, with a documented positional fallback
+
+`FIELD_ALIASES` maps 14 canonical field keys (`priority`, `type`,
+`projectNo`, `projectName`, `pn`, `qty`, `shipDate`, `value`, `license`,
+`notes1`, `deliveryRisks`, `remarks`, `tech`, `oven`) to the header-text
+variants seen in the real file (normalized: newlines → space, collapsed
+whitespace, lower-cased). `findHeaderMap(aoa)` scans a sheet's first 12 rows
+for one containing at least 4 recognized headers including both a P/N-like
+and a project-like column, and uses that as the header row.
+
+Two sheets in the real workbook have **no header row at all** — the person
+maintaining the spreadsheet apparently deleted it at some point, but left
+the data in the exact same column order as a sibling sheet that does have
+headers:
+
+- `"Old"` (the multi-year archive, thousands of rows) — same 11-column order
+  as the `"Done"` sheet (`FALLBACK_DONE`): Priority, Type, Project #,
+  Project Name, P/N, Qty, Ship Date, Value, License, Notes1, Delivery
+  Risks/Notes 2.
+- `"OPEN ISSUE WITH R&D"` — same 14-column full order as the current-month
+  sheet (`FALLBACK_FULL`), detected generically: if a sheet has no header
+  row but its first populated row has ≥8 leading cells filled, assume the
+  full order.
+
+This was verified by hand against the real file (see the git history / the
+conversation this file came from) — the column *meaning* at each position
+matches perfectly (e.g. column 9 always holds `"N/A"`/`"NA"`/blank, which is
+exactly what "Exp. License Status" looks like). It is a narrow, named
+exception, in the same spirit as the Project Report module's own
+special-casing (the "India" filename exclusion, the `ProjReport_D_M_YYYY`
+regex) — a documented quirk of one real file, not a general rule. If a
+future export ever adds a header row to "Old", `findHeaderMap` will find it
+first and the fallback path simply won't trigger.
+
+A sheet that has neither a header nor a wide-enough first row is left out of
+the loaded sheet list entirely (not shown as an empty tab), and the user
+gets a toast naming it, so nothing is silently dropped without being told.
+
+**Sheet ordering**: whatever sheet name *isn't* one of the three fixed names
+(`done`, `open issue with r&d`, `old`, case-insensitive) is treated as "the
+current one" and sorted first. This means the app needs no hardcoded
+knowledge of "JUNE 26" — next month's "JULY 26" sheet is picked up
+automatically as the default/first tab, exactly like the daily Project
+Report file's own month-rotation handling.
+
+### 4.2 The P/N ↔ Qty. line-pairing rule
+
+This was the central ask: a cell in the `P/N` column can hold several
+newline-separated part numbers, and the *n*-th line in the sibling `Qty.`
+cell belongs to the *n*-th P/N line **of that same row** — never to a
+different row, and never exploded into independent top-level rows.
+
+`buildRecord()` splits both cells on `\n`, trims each line, and zips them:
+
+- **Equal line counts** → clean 1:1 pairing (the common case, e.g. row 24
+  in the sample: 3 P/Ns ↔ `10`, `10`, `15`).
+- **Qty has exactly 1 line, P/N has several** → best-effort: that single
+  quantity is applied to every P/N, flagged as a mismatch (shown in the
+  quality bar, and the card gets a gold left-border) so it's visible rather
+  than silently guessed.
+- **Anything else that doesn't line up** → every P/N line is still kept (a
+  P/N is *never* invented or dropped), quantities are paired positionally as
+  far as they go and `null` (rendered as "—") beyond that, and the row is
+  flagged as a mismatch. The principle: an honest "—" beats a confidently
+  wrong number silently attached to the wrong part.
+
+All other fields on that row — Ship Date, Value, Remarks, Priority, etc. —
+belong to the **whole row**, not to an individual P/N, and are stored once
+per record (this matches the sample data exactly: row 24's single value of
+$55,542/$160,715 in the two sample files covers all three P/Ns together).
+
+`Tech.` (and any future multi-line field that *isn't* P/N or Qty) is split
+into a plain list and shown as-is — deliberately **not** zipped with
+anything, since it isn't positionally paired with P/N in the source (e.g. a
+row can have one P/N but three technician names on separate lines).
+
+### 4.3 A real bug found while testing: legend rows disguised as data
+
+While testing against the actual sample file, the "Top projects by value"
+panel showed a phantom `(Blank)` project worth **$7.16M** — clearly wrong.
+Tracing it back: row 44 of the "JUNE 26" sheet is not a data row at all, it
+is a **stray caption** living inside the data range —
+`Project Name = "Risk, with possible delays"`, `P/N = "Ready for shipment"`,
+`Value = 7162150` — almost certainly a legend explaining a colour-coding
+scheme used elsewhere in the workbook, with a leftover total figure in the
+same row by coincidence of column position. A near-identical row exists at
+row 45 (`"C=Commercial, D=Defense (Exp. Lic. Req.)"`) and one in the "Done"
+sheet (row 17). All three share one trait every *genuine* row does not:
+**an empty `Project #` cell.**
+
+The original skip condition was "skip the row only if Project #, Project
+Name, and P/N are *all* empty" — too lenient, since these caption rows do
+populate the Name/P·N-shaped cells. The fix, in `buildRecord()`:
+
+```js
+// Every genuine line carries a Project #. Rows without one are blank
+// spacers or stray captions living in the data area — never real export
+// lines — so skip them rather than showing a fake "(Blank)" project.
+if (!projectNo) return null;
+```
+
+Verified against both sample files after the fix: the phantom row disappears,
+KPI totals drop from the inflated $14.57M to the correct $7.41M (Origin) and
+totals line up with hand-checked sums from a Python read of the same sheet.
+This is the kind of "don't let the site make a mess of the data" failure
+mode the user explicitly worried about — worth remembering if a future
+export ever adds *another* kind of stray annotation row: the litmus test
+used here is "does it have a real Project #", and that held for every
+genuine line in both sample files.
+
+### 4.4 Data model
+
+Each parsed row becomes one **record**:
+
+```
+{
+  _sheet, _row,                                   // provenance
+  priority, type, projectNo, projectName,
+  items: [{ pn, qty }],                            // paired P/N + Qty lines
+  _qtyMismatch,                                    // true if pairing was best-effort
+  shipDate (ms|null), _noDate,
+  value (number), _badValue,
+  license, notes1, deliveryRisks,
+  remarks, techLines: [string], oven
+}
+```
+
+Nothing from the sheet is discarded: every canonical field that has a value
+somewhere in the UI (KPI totals, filters, ranked panels, or the card itself)
+— see §5.
+
+## 5. Export Plan: the UI
+
+### 5.1 Why cards instead of a flat table
+
+The Project Report module's bottom table is a flat, uniform grid: one row
+per record, `position:absolute` virtualization keyed off a constant
+`ROW_H`. Export Plan's records don't have a uniform shape — some have one
+P/N, some have several — so a flat table would either (a) explode multi-P/N
+rows into several visually-independent table rows sharing a date/value,
+which is exactly what was asked *not* to happen, or (b) need `rowspan`-like
+merging, which CSS grid doesn't do cleanly and which breaks click-to-sort /
+click-to-filter row semantics.
+
+Instead each record renders as one **card** (`renderCard`):
+- **Single P/N** (the common case — most rows): P/N and Qty are shown
+  *inline* in the header line, so it visually reads like a normal row.
+- **Multiple P/Ns**: the header line shows only the shared fields
+  (Project #, Name, Ship Date, Value), and a small nested list underneath
+  shows each P/N + Qty pair, visually distinguished (bullet + indent) but
+  still clearly part of the same card/row.
+- A `.mismatch` class (gold left border) marks the (rare) best-effort
+  pairings from §4.2.
+- Every other populated field — Priority, Type, License, Oven, Tech,
+  Remarks, Notes, Delivery risk — is rendered as a chip or a labelled line,
+  but only if it has a value, so a mostly-empty row doesn't get cluttered
+  with empty labels.
+
+Given the size of some sheets (the "Old" archive currently has ~2,600
+records), the list uses simple **"Show more" pagination** (150 at a time)
+rather than scroll-virtualization — variable card heights make the
+position-absolute windowing trick used by Project Report's flat table
+impractical, and 150 cards is cheap enough to paint directly. Filtering
+resets the visible count back to 150.
+
+Default sort is by ship date, ascending, nulls last — there's no
+column-header sort UI (that concept doesn't really apply to a card layout).
+This is a intentionally minimal choice for v1; a "sort by" control would be
+a reasonable follow-up if it turns out to matter in practice.
+
+### 5.2 Filters, ranked panels, timeline
+
+All three reuse the *exact same CSS classes* as Project Report
+(`.filters`/`.cb`/`.pop`/`.opt`, `.rt`/`.rrow`/`.rth`, `.tl-scroll`/`.tl-band`)
+— since that CSS is class-based, not id-based, none of it needed to be
+duplicated; only the JS wiring (new element ids, `ep`-prefixed) is new.
+
+- **Filters**: Project #, Customer/Project name, P/N, Tech, Priority, Type,
+  Ship date. P/N and Tech are the two *multi-valued* facets (a record can
+  match a filter through any one of its items/tech lines) — `facetValues()`
+  returns an array per record per column, and both the cross-filter facet
+  counting and the match test (`recordMatches`) iterate over that array,
+  generalizing the single-value logic Project Report uses.
+- **Ranked panels**: "Top projects by value" (group by `projectNo`, sum
+  `value`) and "Top P/N by quantity" (flatten every record's `items`, group
+  by `pn`, sum `qty`) — value isn't itemized per P/N in the source data (see
+  §4.2), so ranking P/N by value wouldn't be meaningful; quantity is.
+- **Timeline**: identical bucketing logic to Project Report (month → quarter
+  → year based on how many distinct months are present), duplicated rather
+  than shared for the same reason as the format helpers in §4.
+
+### 5.3 KPI band & quality bar
+
+Five cards: Total value, Total quantity (summed across all items, not
+records), Projects (distinct `projectNo`), Distinct P/N, Rows shown. The
+quality bar below reports, for the *active sheet* (unfiltered): rows without
+a ship date, rows without a P/N, credit (negative-value) rows, values that
+failed to parse, and — the new one — rows where the P/N/Qty line pairing
+was best-effort. This mirrors Project Report's "don't hide data problems,
+surface them" convention.
+
+## 6. Remembering the last file (Export Plan)
+
+Only the second half of Project Report's two-layer scheme (§1) applies
+here: the plain **cached-file restore**, not the folder auto-connect.
+Reasoning: folder auto-connect exists because the daily report lives at a
+known, fixed network path and follows a predictable filename pattern
+(`ProjReport_D_M_YYYY.xml`) that lets the app pick "today's file"
+unattended. No such fixed path or naming convention was described for the
+Export Plan workbook — it's a file someone picks by hand — so there's
+nothing to auto-discover. If a fixed network location for it ever exists,
+the same `showDirectoryPicker` + IndexedDB-handle pattern from Project
+Report's §1.1 could be copied over.
+
+Implementation: shares the *same* IndexedDB database (`"aitech-report"`)
+and object store (`"files"`) that Project Report already creates, but under
+its own key (`"lastFileExportPlan"` vs Project Report's `"lastFile"`), so
+the two pages' remembered files never collide or overwrite each other.
+Export Plan's own `idbOpen()` (duplicated, not shared — same reasoning as
+§4) runs the identical idempotent "create the store if it doesn't exist yet"
+upgrade logic at the same DB version (2), so it's safe regardless of which
+module's script happens to open the database first on a fresh browser.
+
+On every successful parse, the raw `File` is cached
+(`epCacheFile`); on boot, `epBootstrap()` looks it up and, if present,
+re-parses it automatically and shows a toast naming the file and when it was
+saved — same UX pattern as Project Report's `restoreCached`.
+
+## 7. Testing performed
+
+No test framework in this repo (matches its zero-build-step philosophy), so
+verification was done with Playwright driving the pre-installed headless
+Chromium directly against `file://index.html`, using the two real sample
+workbooks. Covered:
+
+- Both sample files load without console/page errors, on both a desktop
+  (1400×900) and an iPhone-sized (390×844) viewport.
+- Header-by-name detection works identically against the "Origin" (16-col)
+  and "Final" (8-col, same headers minus a few columns) versions of the
+  current-month sheet — confirms the by-name matching, not position, is
+  what's doing the work.
+- The specific row-24 example from the request (`4C106-R720-01A`/`10`,
+  `4C437-R01a`/`10`, `4P221-R01`/`15`, one shared date and value) renders
+  as one card with three correctly-paired nested items, in both sample
+  files (which have that project at different values/rows — confirmed the
+  pairing logic, not a hardcoded expectation, is what matched).
+- The positional fallback for the headerless `"Old"` (2,610 rows) and
+  `"OPEN ISSUE WITH R&D"` (1 row) sheets produces sane, correctly-labelled
+  records.
+- The legend-row bug (§4.3) reproduced and was fixed; re-verified clean
+  after the fix (KPI totals now match a hand Python cross-check).
+- Interactions: "Show more" pagination, ranked-row click-to-filter,
+  timeline-bar click-to-filter, combo filters, "Clear all" — all update the
+  row count and re-render without errors.
+- Page switcher: default page on fresh load, mobile tap toggles both
+  directions, desktop button toggles, active page persists across reload.
+- Cross-page isolation: dropping a file onto the Export Plan dropzone while
+  it's the active page does **not** touch Project Report's state (the
+  capture-phase drop guard from §3 works); Project Report's own
+  file-rejection error path (tested by feeding it the Export Plan workbook)
+  still produces its original, unmodified error message — confirming
+  zero regressions in the existing module.
+- "Remember the last file" restores automatically after a reload, with the
+  expected toast, without disturbing Project Report's own (empty, in that
+  test) cached state.
+
+## 8. Known limitations / deliberately deferred
+
+- No "suspect year" quality flag for Export Plan dates (Project Report has
+  one — `_sus` — for dates outside a sane range). Wasn't in the request;
+  worth adding if bad dates turn out to be common in this data too.
+- No sort-by control on the card list (see §5.1) — default is ship-date
+  ascending.
+- Export Plan only accepts `.xlsx`/`.xls`, no SpreadsheetML `.xml` fast
+  path — the real source is a genuine Excel workbook, so the extra parser
+  wasn't built. If that ever changes, Project Report's `parseSpreadsheetML`
+  (section 4 of its script) is the template to adapt.
+- The `"Old"`/`"OPEN ISSUE WITH R&D"` positional fallbacks are keyed to the
+  exact column order observed in the two sample files. If the source system
+  ever reorders those specific sheets' columns *without* adding a header
+  row back, the fallback would silently mis-map — there's no way to detect
+  that from a headerless sheet. If it starts looking wrong, check `"Old"`
+  first.
+- No folder auto-connect for Export Plan (see §6) — by-hand file picking
+  and the cached-file restore only.
