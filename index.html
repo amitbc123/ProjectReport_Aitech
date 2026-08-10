@@ -154,6 +154,7 @@
   .filters{margin-top:24px; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:var(--shadow)}
   .filters .head{display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line)}
   .filters .head .eyebrow{margin-right:auto}
+  .mfbar{display:none}
   .fgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; padding:14px 16px}
   .field{position:relative}
   .field > label{display:block; color:var(--muted); font-size:11px; margin-bottom:5px}
@@ -217,7 +218,29 @@
     .kpi .val{font-size:22px}
     .kpi .sub{font-size:11px}
     .quality{font-size:11px; gap:10px}
-    .filters{margin-top:18px}
+    .filters{
+      margin-top:18px; position:sticky; z-index:55;
+      top:calc(var(--headerH, 56px) + 8px);
+    }
+    .filters .head{display:none}
+    .mfbar{
+      display:flex; align-items:center; gap:8px; width:100%;
+      border:1px solid var(--line-strong); background:var(--surface);
+      border-radius:var(--r); padding:0 12px; min-height:42px;
+      font-weight:500; color:var(--ink-2); cursor:pointer;
+    }
+    .mfbar .mfLabel{margin-right:auto}
+    .mfbar .badge{background:var(--ink); color:#fff; border-radius:20px; font-size:10.5px; padding:2px 7px; font-variant-numeric:tabular-nums}
+    .mfbar .mfCaret{color:var(--faint); font-size:10px; transition:transform .15s}
+    .filters.mExpanded .mfbar{border-color:var(--gold); background:#FEFCF7}
+    .filters.mExpanded .mfbar .mfCaret{transform:rotate(180deg)}
+    .fpanel{display:none}
+    .filters.mExpanded .fpanel{
+      display:block; position:absolute; left:0; right:0; top:100%; margin-top:6px;
+      background:var(--surface); border:1px solid var(--line-strong); border-radius:10px;
+      box-shadow:0 12px 28px rgba(18,22,28,.16); max-height:calc(100vh - var(--headerH, 56px) - 90px);
+      overflow-y:auto;
+    }
     .fgrid{grid-template-columns:1fr; gap:10px; padding:12px}
     .cb{height:42px}
     .cb input{height:40px; font-size:16px}
@@ -383,13 +406,20 @@
 
   <main id="dash" hidden>
 
-    <section class="filters">
+    <section class="filters" id="filtersSection">
       <div class="head">
         <div class="eyebrow">Filters</div>
         <button class="btn ghost" id="clearAll">Clear all</button>
       </div>
-      <div class="fgrid" id="fgrid"></div>
-      <div class="chips" id="chips"></div>
+      <button type="button" class="mfbar" id="mfToggle" aria-expanded="false" aria-controls="fpanel">
+        <span class="mfLabel">Filters</span>
+        <span class="badge" id="mfCount" hidden>0</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
+      <div class="fpanel" id="fpanel">
+        <div class="fgrid" id="fgrid"></div>
+        <div class="chips" id="chips"></div>
+      </div>
     </section>
 
     <section class="kpis" id="kpis"></section>
@@ -1094,6 +1124,9 @@ function renderChips(){
     });
   });
   document.querySelectorAll(".field").forEach(function(f){ if (f._refresh) f._refresh(); });
+  var mfCount = document.getElementById("mfCount");
+  mfCount.hidden = !out.length;
+  mfCount.textContent = out.length;
 }
 
 /* ============================================================
@@ -1646,6 +1679,28 @@ document.addEventListener("click", function(e){
   if (openPop && !e.target.closest(".field")) { openPop.hidden = true; openPop = null; }
 });
 window.addEventListener("resize", function(){ if (!dash.hidden) paintRows(false); });
+
+/* ---------- mobile filter bar (sticky, collapsible) ---------- */
+var filtersSection = document.getElementById("filtersSection");
+var mfToggle = document.getElementById("mfToggle");
+mfToggle.addEventListener("click", function(){
+  var open = !filtersSection.classList.contains("mExpanded");
+  filtersSection.classList.toggle("mExpanded", open);
+  mfToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", function(e){
+  if (filtersSection.classList.contains("mExpanded") && !e.target.closest("#filtersSection")) {
+    filtersSection.classList.remove("mExpanded");
+    mfToggle.setAttribute("aria-expanded", "false");
+  }
+});
+
+function syncHeaderHeight(){
+  document.documentElement.style.setProperty("--headerH", topbar.offsetHeight + "px");
+}
+new ResizeObserver(syncHeaderHeight).observe(topbar);
+window.addEventListener("resize", syncHeaderHeight);
+syncHeaderHeight();
 
 /* ============================================================
    17. Daily report folder (Chrome / Edge File System Access API)
