@@ -223,11 +223,22 @@
       color:var(--ink-2); text-align:center; font-weight:500;
     }
     #newFileBtn:hover{border-color:var(--ink-2); color:var(--ink)}
-    .kpis{grid-template-columns:1fr 1fr; row-gap:16px; margin-top:20px}
-    .kpi{padding:2px 12px 14px}
-    .kpi:nth-child(odd){padding-left:0; border-left:0}
-    .kpi .val{font-size:22px}
-    .kpi .sub{font-size:11px}
+    .kpis{
+      display:flex; flex-wrap:nowrap; overflow-x:auto; gap:8px;
+      margin-top:16px; padding:2px 2px 6px;
+      scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch;
+    }
+    .kpi{
+      flex:0 0 auto; scroll-snap-align:start; min-width:128px;
+      padding:9px 11px; border-left:0 !important;
+      background:var(--surface); border:1px solid var(--line); border-radius:8px;
+    }
+    .kpi .lab{font-size:9.5px; margin-bottom:3px; white-space:nowrap}
+    .kpi .val{font-size:17px; line-height:1.15}
+    .kpi .sub{
+      font-size:9px; margin-top:2px; white-space:nowrap; overflow:hidden;
+      text-overflow:ellipsis; max-width:100px;
+    }
     .quality{font-size:11px; gap:10px}
     .filters{
       margin-top:0; position:sticky; z-index:55;
