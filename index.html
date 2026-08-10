@@ -213,6 +213,9 @@
     .segmented{order:3; margin-left:auto}
     .segmented button{padding:6px 10px; font-size:12.5px}
     .segmented button .c{display:none}
+    .segmented button[aria-pressed="true"]{background:var(--gold)}
+    .kpi .val.good{color:var(--teal)}
+    .kpi .val.warn{color:var(--rose)}
     #reloadFolderBtn,#newFileBtn{order:4; width:100%}
     .btn{min-height:40px}
     #newFileBtn{
@@ -241,6 +244,8 @@
     .mfbar .mfLabel{margin-right:auto}
     .mfbar .badge{background:var(--ink); color:#fff; border-radius:20px; font-size:10.5px; padding:2px 7px; font-variant-numeric:tabular-nums}
     .mfbar .mfCaret{color:var(--faint); font-size:10px; transition:transform .15s}
+    .mfbar.hasFilters{border-color:#E7D6A9; background:#FEFCF7}
+    .mfbar.hasFilters .badge{background:var(--gold)}
     .filters.mExpanded .mfbar{border-color:var(--gold); background:#FEFCF7}
     .filters.mExpanded .mfbar .mfCaret{transform:rotate(180deg)}
     .fpanel{display:none}
@@ -931,16 +936,18 @@ function totalsOf(rows){
 }
 function renderKpis(){
   var f = totalsOf(state.filtered), a = state.totals;
+  var donePct = f.n ? pct(f.done, f.n) : 0;
   var cards = [
     { lab:"Total value",       val:money(f.ext),                 sub:"of " + money(a.ext) + " in this sheet", neg:f.ext < 0 },
     { lab:"Total quantity",    val:nfInt.format(f.qty),          sub:"of " + nfInt.format(a.qty) + " units in this sheet" },
     { lab:"Projects",          val:nfInt.format(f.proj.size),    sub:"of " + nfInt.format(a.proj.size) + " in this sheet" },
     { lab:"Purchase orders",   val:nfInt.format(f.po.size),      sub:"of " + nfInt.format(a.po.size) + " in this sheet" },
-    { lab:"Lines marked Done", val:(f.n ? pct(f.done, f.n) : 0) + "%", sub:nfInt.format(f.done) + " of " + nfInt.format(f.n) + " lines shown" }
+    { lab:"Lines marked Done", val:donePct + "%", sub:nfInt.format(f.done) + " of " + nfInt.format(f.n) + " lines shown",
+      good: donePct >= 80, warn: f.n > 0 && donePct < 40 }
   ];
   document.getElementById("kpis").innerHTML = cards.map(function(c){
     return '<div class="kpi"><div class="lab">'+c.lab+'</div>'+
-           '<div class="val'+(c.neg?" neg":"")+'">'+esc(c.val)+'</div>'+
+           '<div class="val'+(c.neg?" neg":"")+(c.good?" good":"")+(c.warn?" warn":"")+'">'+esc(c.val)+'</div>'+
            '<div class="sub">'+esc(c.sub)+'</div></div>';
   }).join("");
 }
@@ -1136,6 +1143,7 @@ function renderChips(){
   var mfCount = document.getElementById("mfCount");
   mfCount.hidden = !out.length;
   mfCount.textContent = out.length;
+  document.getElementById("mfToggle").classList.toggle("hasFilters", !!out.length);
 }
 
 /* ============================================================
