@@ -99,45 +99,64 @@ re-attach them.
 
 ## 3. Two pages, one shell — the page switcher
 
-**Requirement**: on mobile, tapping the "Project Report" title switches to
-Export Plan; on desktop, a separate button for the other type sits next to
-the title.
+**Requirement** (v1): on mobile, tapping the "Project Report" title
+switches to Export Plan; on desktop, a separate button for the other type
+sits next to the title.
 
-**Design**: a small, self-contained router (`<script>` block, ~30 lines,
-right after the pasted SheetJS library) that does nothing but toggle which
-of two top-level containers is visible:
+**v1 design** (superseded, see below): a standalone, always-visible dark
+bar above everything (`.pagebar`), sitting outside both page containers.
+It worked, but it sat *inset* within `.app`'s own side padding (28px)
+instead of bleeding to the viewport edge the way the real header does
+(`header.top{margin:0 -28px}`) — visually it read as a strip narrower than
+the rest of the page, which came across as "the whole site got narrower."
+Removed.
+
+**Current design**: no standalone bar at all. The switcher lives in two
+places instead:
+
+1. **Inside each page's own header**, directly under the brand title (one
+   row below it), exactly matching "next to the existing title, a row
+   down": `.brand` became a `flex-direction:column` block — first row is
+   the existing `<b>title</b><span>Aitech</span>`, second row is a small
+   pill button (`.switchpage`) naming the *other* page. Clicking the brand
+   `<b>` itself also switches (kept from v1, works on any viewport, not
+   just mobile — harmless extra affordance now that there's no
+   desktop/mobile split to maintain).
+2. **On the empty drop screen** (`.switchhint`, small muted text + a
+   `.switchpage` pill, under the privacy note): the header is `hidden`
+   until a file loads (original, deliberate design — the empty state is
+   meant to be bare), which means the header-based switcher from (1) is
+   invisible on a first visit. Without a second entry point, a first-time
+   user would have **no way to reach the other page at all** — a real
+   dead end, found while testing this exact change. The drop-screen hint
+   fixes that, without reintroducing a standalone bar (it's inside the
+   existing centered dropzone card, so it doesn't change the page's width
+   or add a new full-bleed element).
 
 ```html
 <div class="app">
-  <div class="pagebar" id="pagebar"> ... </div>       <!-- new, always visible -->
   <div id="page-report" class="page" data-page="report">  <!-- existing markup, untouched, just wrapped -->
-    <header id="top" hidden> ... </header>
-    ...
+    <header id="top" hidden>
+      <div class="brand">
+        <div class="brandline"><b id="reportBrandTitle">Project Report</b><span>Aitech</span></div>
+        <button class="switchpage" id="switchToExportBtn">Export Plan</button>
+      </div>
+      ...
+    </header>
+    <section class="dropscreen">
+      ...
+      <div class="switchhint">Looking for the Export Plan instead? <button class="switchpage" id="switchToExportBtn2">Switch</button></div>
+    </section>
   </div>
-  <div id="page-export" class="page" data-page="export" hidden>  <!-- new -->
-    <header id="epTop" hidden> ... </header>
-    ...
-  </div>
+  <div id="page-export" class="page" data-page="export" hidden> ... mirrored ... </div>
 </div>
 ```
 
-Why a *new*, always-visible bar instead of reusing the existing `#top`
-header for the switcher: `#top` is `hidden` until a file loads (by original
-design — the empty drop screen is deliberately bare). The switcher needs to
-work *before* a file is loaded too, on either page, so it had to live
-outside that hide/show cycle. It's intentionally slim (a thin dark strip)
-so it doesn't look like a second, competing brand header once a file *is*
-loaded and `#top`/`#epTop` become visible underneath it.
-
-Behavior split by viewport, per the request:
-- **Mobile** (`≤640px`): `.pageother` button is hidden via CSS; `.pagebrand`
-  (showing the *current* page's name) is the tap target.
-- **Desktop** (`>640px`): `.pagebrand` becomes inert (`pointer-events:none`,
-  just a label) and `.pageother` — labelled with the *other* page's name —
-  is the clickable control next to it.
-
-Both buttons call the same `go(other(current()))`, so the CSS is the only
-thing that decides which one is reachable at a given width.
+The router script (still the same small, self-contained `<script>` block
+right after the pasted SheetJS library) just wires four click targets per
+direction (`reportBrandTitle` + `switchToExportBtn` + `switchToExportBtn2`
+→ export; the export-page mirrors → report) to the same
+`go(other(current()))`, and toggles which page container is visible.
 
 The last-used page is remembered in `localStorage["aitech.activePage"]` so
 a reload reopens the same page. This wasn't explicitly requested but was a

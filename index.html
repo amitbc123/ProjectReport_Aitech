@@ -66,8 +66,9 @@
     margin:0 -28px 0; padding:14px 28px;
     display:flex; align-items:center; gap:20px; flex-wrap:wrap;
   }
-  .brand{display:flex; align-items:baseline; gap:10px; margin-right:auto}
-  .brand b{font-family:var(--font-display); font-weight:600; font-size:16px; letter-spacing:.02em}
+  .brand{display:flex; flex-direction:column; align-items:flex-start; gap:4px; margin-right:auto}
+  .brand .brandline{display:flex; align-items:baseline; gap:10px}
+  .brand b{font-family:var(--font-display); font-weight:600; font-size:16px; letter-spacing:.02em; cursor:pointer}
   .brand span{color:var(--faint); font-size:12px}
   .filemeta{color:var(--muted); font-size:12px; display:flex; gap:8px; align-items:center}
   .filemeta .dot{width:3px;height:3px;border-radius:50%;background:var(--line-strong)}
@@ -378,33 +379,23 @@
   /* ============================================================
      Page switcher (Project Report / Export Plan)
      ------------------------------------------------------------
-     Always-visible strip above both pages, independent of file
-     load state. Mobile: the current page name is the tap target.
-     Desktop: a separate button names the other page, next to it.
+     Lives inside each page's own header, directly under the brand
+     title — not a separate full-width bar (an earlier version used
+     one; it sat inset within .app's own side padding instead of
+     bleeding to the edge like the header does, which visually read
+     as the whole site having gotten narrower — removed).
      ============================================================ */
-  .pagebar{
-    position:sticky; top:0; z-index:80;
-    display:flex; align-items:center; gap:12px;
-    background:var(--ink); padding:7px 28px;
-  }
-  .pagebar .pagebrand{
-    border:0; background:transparent; color:#fff; cursor:pointer;
-    font-family:var(--font-display); font-weight:600; font-size:12.5px; letter-spacing:.04em;
-    padding:3px 2px;
-  }
-  .pagebar .pageother{
-    border:1px solid rgba(255,255,255,.28); background:transparent; color:rgba(255,255,255,.82);
-    border-radius:20px; padding:4px 13px; font-size:11.5px; font-weight:500; cursor:pointer;
+  .switchpage{
+    border:1px solid var(--line-strong); background:var(--surface); color:var(--muted);
+    border-radius:20px; padding:2px 11px; font-size:11px; font-weight:500; cursor:pointer;
     white-space:nowrap;
   }
-  .pagebar .pageother:hover{border-color:var(--gold); color:#fff}
-  @media (min-width:641px){
-    .pagebar .pagebrand{cursor:default; pointer-events:none; opacity:.92}
-  }
-  @media (max-width:640px){
-    .pagebar{padding:7px 12px}
-    .pagebar .pageother{display:none}
-  }
+  .switchpage:hover{border-color:var(--gold); color:#5F4708}
+  /* Same switch action, offered again on the empty drop screen — the
+     header (and its switch button) only appears once a file is loaded,
+     so without this a first-time visitor would have no way to reach
+     the other page at all. */
+  .switchhint{margin-top:14px; color:var(--faint); font-size:12px; display:flex; align-items:center; justify-content:center; gap:8px}
 
   /* Export Plan's own header sits at a different height than Project
      Report's, so its sticky filter bar tracks a separate CSS variable
@@ -461,15 +452,13 @@
 <body>
 <div class="app">
 
-  <div class="pagebar" id="pagebar">
-    <button type="button" class="pagebrand" id="pageBrand">Project Report</button>
-    <button type="button" class="pageother" id="pageOtherBtn">Export Plan</button>
-  </div>
-
   <div id="page-report" class="page" data-page="report">
 
   <header class="top" id="top" hidden>
-    <div class="brand"><b>Project Report</b><span>Aitech</span></div>
+    <div class="brand">
+      <div class="brandline"><b id="reportBrandTitle">Project Report</b><span>Aitech</span></div>
+      <button type="button" class="switchpage" id="switchToExportBtn">Export Plan</button>
+    </div>
     <div class="filemeta" id="filemeta"></div>
     <div class="segmented" id="sheetToggle" role="group" aria-label="Worksheet"></div>
     <button class="btn" id="reloadFolderBtn" hidden>Reload from folder</button>
@@ -503,6 +492,7 @@
         The file is read on this computer and never leaves it.<br>
         Nothing is uploaded, stored, or sent anywhere. This view is read-only.
       </div>
+      <div class="switchhint">Looking for the Export Plan instead? <button type="button" class="switchpage" id="switchToExportBtn2">Switch</button></div>
       <div id="dropErr"></div>
     </div>
     </div>
@@ -603,7 +593,10 @@
   <div id="page-export" class="page" data-page="export" hidden>
 
   <header class="top" id="epTop" hidden>
-    <div class="brand"><b>Export Plan</b><span>Aitech</span></div>
+    <div class="brand">
+      <div class="brandline"><b id="exportBrandTitle">Export Plan</b><span>Aitech</span></div>
+      <button type="button" class="switchpage" id="switchToReportBtn">Project Report</button>
+    </div>
     <div class="filemeta" id="epFilemeta"></div>
     <div class="segmented" id="epSheetToggle" role="group" aria-label="Worksheet"></div>
     <label class="btn ghost" id="epNewFileBtn" for="epFileInput">Load another file</label>
@@ -625,6 +618,7 @@
         The file is read on this computer and never leaves it.<br>
         Nothing is uploaded, stored, or sent anywhere. This view is read-only.
       </div>
+      <div class="switchhint">Looking for the Project Report instead? <button type="button" class="switchpage" id="switchToReportBtn2">Switch</button></div>
       <div id="epDropErr"></div>
     </div>
     </div>
@@ -2145,14 +2139,18 @@ bootstrap();
    Purely additive: neither page's own script is touched. This
    just toggles which page's root element is visible and remembers
    the choice so a reload reopens the same page.
+
+   The switcher itself lives inside each page's own header (next
+   to that page's brand title, one line under it) rather than as a
+   separate bar above everything — a standalone bar sat inset
+   within .app's own side padding instead of bleeding to the edge
+   like the header does, which visually read as the whole site
+   having gotten narrower.
    ============================================================ */
 (function(){
 "use strict";
 var PAGE_KEY = "aitech.activePage";
 var pages = { report: document.getElementById("page-report"), export: document.getElementById("page-export") };
-var brand = document.getElementById("pageBrand");
-var otherBtn = document.getElementById("pageOtherBtn");
-var LABEL = { report:"Project Report", export:"Export Plan" };
 
 function current(){
   var v = null;
@@ -2164,14 +2162,16 @@ function other(p){ return p === "report" ? "export" : "report"; }
 function show(page){
   pages.report.hidden = page !== "report";
   pages.export.hidden = page !== "export";
-  brand.textContent = LABEL[page];
-  otherBtn.textContent = LABEL[other(page)];
   try{ localStorage.setItem(PAGE_KEY, page); }catch(e){}
 }
 function go(page){ show(page); }
 
-brand.addEventListener("click", function(){ go(other(current())); });
-otherBtn.addEventListener("click", function(){ go(other(current())); });
+["reportBrandTitle", "switchToExportBtn", "switchToExportBtn2"].forEach(function(id){
+  document.getElementById(id).addEventListener("click", function(){ go("export"); });
+});
+["exportBrandTitle", "switchToReportBtn", "switchToReportBtn2"].forEach(function(id){
+  document.getElementById(id).addEventListener("click", function(){ go("report"); });
+});
 
 show(current());
 })();
