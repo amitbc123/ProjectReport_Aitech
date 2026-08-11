@@ -805,6 +805,72 @@ surfaced once someone was actually using it.
   stale, unrelated selection next to a list group that has nothing to do
   with it.
 
+### 5.8 Seventh round: adjacent-group colors, a Chart/Buttons view toggle, a real highlight bug
+
+- **`buildProjectColorMap` now ranks by list order, not qty rank.** The
+  user could see two neighboring framed groups in nearly the same color —
+  root cause: colors were assigned by `groupByProject`'s qty-descending
+  rank, a completely different ordering than the row order the list
+  actually renders in, so two qty-adjacent (similarly-colored, since
+  `SERIES_COLORS`' sequence was validated for *adjacent-slot* separation)
+  projects could easily end up qty-close but sheet-adjacent by pure
+  coincidence. Fixed by ranking on first-appearance order in
+  `activeSheet().rows` instead — the same order groups are emitted in by
+  `renderPieList` — so consecutive list neighbors always get consecutive
+  palette slots, which is exactly the pairing the palette's own CVD
+  validation covers. This deliberately makes the list's colors diverge
+  from the pie's own (still qty-ranked) slice colors in Project mode,
+  where they used to coincide — see the file for why that's an accepted,
+  intentional trade (two color systems answering two different
+  questions), not an oversight.
+- **A real bug, found while building the above: `.epsl-frame` never
+  carried `data-project`/`data-pn`.** `highlightPieListSlice` (driven by
+  the pie itself — hovering/picking a wedge or a Buttons-view button)
+  matches elements by those two attributes; the frame only ever had
+  `data-group`, so it silently never matched and never got `.hl` from
+  that path — only `highlightPieListGroup` (the list's own ambiguous-
+  click fallback, §5.7) happened to hit it, via `data-group` alone. In
+  other words: the "selection isn't clear enough" complaint was partly a
+  real styling contrast issue (next bullet) and partly this — picking a
+  slice from the *pie side* was leaving the frame's border/background
+  exactly as it looked at rest, for every interaction path except the
+  ambiguous list-click one. Fixed by giving the frame the same
+  `data-project`/`data-pn="…"` (the group's `|`-joined P/Ns, same value
+  the merged Value cell already carries) as its member cells.
+- **The idle vs. selected contrast was also genuinely too subtle** even
+  once the frame started participating — 6% vs 20% tint on the same
+  `color-mix()` scale reads as "slightly more of the same," not "this is
+  now selected." Pushed apart: idle stays put (border ~45% mix, fill 6%),
+  `.hl` jumps to a 3px solid-color border, a much richer 38% fill, and an
+  outer `box-shadow` ring (22% mix) — deliberately closer to "solid block"
+  than "tint," so selected reads unambiguously at a glance. `.grouphover`
+  (the transient hover-only state) sits at a deliberately lower 14%/12% so
+  it stays visually distinct from the persistent `.hl` state — hovering
+  and having-picked no longer look like the same thing at different
+  opacities.
+- **A second way to browse slices: a Chart/Buttons view toggle**
+  (`#epPieViewToggle`, top-right of the chart column, sharing its header
+  row with the existing P/N/Project toggle at top-left — "Chart" and
+  "Buttons" were picked as the clearest plain-English names for "the
+  donut" vs. "a grid of buttons, one per group"). Both views are always
+  rendered (`renderPie()` calls both `renderPieChart` and the new
+  `renderPieButtons` every time; `wirePieViewToggle` only ever toggles
+  which one has the `hidden` attribute), so switching between them is
+  instant and never loses the current pick. Buttons mode
+  (`.eppie-buttons`, `grid-template-columns:repeat(5,1fr)`, 3 columns
+  under the 640px breakpoint) is one button per slice, each colored via
+  the same `--frame-color`-driven `color-mix()` pattern as the list's
+  frames, scrolling if there are more than fit. A button click is always
+  unambiguous — unlike a list-group click, one button is always exactly
+  one slice — so it just calls the same `pieTogglePick` the chart's own
+  wedges use. Keeping both visuals' "picked" look in sync needed
+  `pieTogglePick` to stop reaching into `pieState.svg` directly and go
+  through a new `pieSetPickedClass(idx, on)` that toggles the class on
+  *both* the matching `<path>` (if the chart exists) and the matching
+  `.eppie-btn` (if the button grid exists) — so picking a slice in one
+  view and then switching to the other shows the same slice already
+  marked picked, with no extra state to reconcile.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies

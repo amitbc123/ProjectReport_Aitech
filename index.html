@@ -529,17 +529,24 @@
     border:1.5px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
     background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
     border-radius:6px; pointer-events:none;
-    transition:background .12s, border-color .12s;
+    transition:background .12s, border-color .12s, box-shadow .12s;
   }
-  .epsl-frame.grouphover{border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 12%, white)}
-  .epsl-frame.hl{border-width:2px; border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 20%, white)}
+  .epsl-frame.grouphover{border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 14%, white)}
+  /* Selected (.hl) needs to read as unmistakably different from the
+     baseline framed-but-idle look, not just "a bit more of the same
+     tint" — solid-ish fill, a thick border, and an outer glow ring. */
+  .epsl-frame.hl{
+    border-width:3px; border-color:var(--frame-color);
+    background:color-mix(in srgb, var(--frame-color) 38%, white);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--frame-color) 22%, white);
+  }
   .epsl-cell{
     display:flex; align-items:center; min-width:0; cursor:pointer;
     padding:7px 0; font-size:12.5px; border-bottom:1px solid #F4F5F7;
-    transition:background .12s;
+    transition:background .12s, font-weight .12s;
   }
-  .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 10%, white)}
-  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 20%, white)}
+  .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 12%, white)}
+  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 38%, white); font-weight:700}
   .epsl-proj{grid-column:1}
   .epsl-pn{grid-column:2}
   .epsl-qty{grid-column:3; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
@@ -564,17 +571,45 @@
     flex:1 1 auto; min-width:180px;
     padding:14px 20px 10px;
   }
-  .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0; flex:0 0 auto}
-  /* The chart fills whatever box is left in the column after the toggle —
-     both eppie-chart and its svg are sized 100%/100% of that box (not a
-     fixed max-width), and the SVG's own viewBox aspect ratio + default
-     preserveAspectRatio="xMidYMid meet" does the "fit without distorting"
-     part, so the donut is always as big as the available space allows. */
+  .eppie-chart-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    flex:0 0 auto; margin-bottom:12px; flex-wrap:wrap;
+  }
+  .eppie-toggle,.eppie-viewtoggle{flex:0 0 auto}
+  /* Chart view: fills whatever box is left in the column after the head
+     row — both eppie-chart and its svg are sized 100%/100% of that box
+     (not a fixed max-width), and the SVG's own viewBox aspect ratio +
+     default preserveAspectRatio="xMidYMid meet" does the "fit without
+     distorting" part, so the donut is always as big as the available
+     space allows. Buttons view: a scrollable grid in the same box,
+     shown instead of (never alongside) the chart — see wirePieViewToggle. */
   .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
   .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
   .eppie-chart svg{display:block; width:100%; height:100%}
   .eppie-chart path{cursor:pointer; outline:none}
   .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
+  .eppie-buttons{
+    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
+    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+    align-content:start; padding:2px;
+  }
+  .eppie-btn{
+    display:flex; align-items:center; gap:6px; min-width:0;
+    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; padding:7px 9px; font-size:11.5px; color:var(--ink-2);
+    cursor:pointer; text-align:left; font-family:inherit;
+    transition:background .12s, border-color .12s, box-shadow .12s;
+  }
+  .eppie-btn:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
+  .eppie-btn.picked{
+    border-width:2px; border-color:var(--frame-color);
+    background:color-mix(in srgb, var(--frame-color) 38%, white);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--frame-color) 22%, white);
+    font-weight:700; color:var(--ink);
+  }
+  .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
+  .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
   @media (max-width:1180px){
     .eppie-grid{--eppie-h:360px}
@@ -589,6 +624,8 @@
     .epsl-head{padding-left:12px; padding-right:12px}
     .eppie-listscroll{padding:0 12px}
     .eppie-chart-col{padding:12px 12px 8px}
+    .eppie-buttons{grid-template-columns:repeat(3,1fr)}
+    .eppie-btn{font-size:11px; padding:6px 7px}
   }
 
   /* ============================================================
@@ -807,12 +844,19 @@
         </div>
         <div class="eppie-resizer" id="epPieResizer" role="separator" aria-orientation="vertical" aria-label="Resize list/chart split" tabindex="0"></div>
         <div class="eppie-chart-col">
-          <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
-            <button type="button" data-mode="pn" aria-pressed="true">P/N</button>
-            <button type="button" data-mode="project" aria-pressed="false">Project</button>
+          <div class="eppie-chart-head">
+            <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
+              <button type="button" data-mode="pn" aria-pressed="true">P/N</button>
+              <button type="button" data-mode="project" aria-pressed="false">Project</button>
+            </div>
+            <div class="segmented eppie-viewtoggle" id="epPieViewToggle" role="group" aria-label="View as">
+              <button type="button" data-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" data-view="buttons" aria-pressed="false">Buttons</button>
+            </div>
           </div>
           <div class="eppie-chartscroll">
             <div class="eppie-chart" id="epPieChart"></div>
+            <div class="eppie-buttons" id="epPieButtons" hidden></div>
           </div>
         </div>
       </div>
@@ -2690,14 +2734,24 @@ function groupByPN(recs){
   return Array.from(m.values()).sort(function(a,b){ return b.qty - a.qty; });
 }
 // One color per distinct project, ranked the same way groupByProject ranks
-// them (by qty desc) — every project gets its own color (even a project
-// with a single P/N line), consistent no matter which pie mode is active,
-// used only by the item list (§ renderPieList), never by the pie itself
-// when it's in P/N mode.
+// them by the order each project *first appears* in the sheet — i.e. list
+// order, not qty rank — because that's the order groups actually sit
+// next to each other in renderPieList. SERIES_COLORS' sequence was
+// validated for adjacent-pair CVD separation (see the dataviz palette
+// notes), so assigning consecutive slots to consecutive *list* neighbors
+// is what actually keeps neighboring groups visually distinct; ranking
+// by qty (the old behavior) could put two similarly-ranked, adjacently-
+// colored projects right next to each other in the list by coincidence.
+// Deliberately independent of the pie's own (qty-ranked) slice colors —
+// see EXPORT_PLAN_NOTES.md for why that divergence is fine.
 function buildProjectColorMap(recs){
-  var ranked = groupByProject(recs);
+  var order = [], seen = new Set();
+  recs.forEach(function(r){
+    var k = r.projectNo || BLANK;
+    if (!seen.has(k)){ seen.add(k); order.push(k); }
+  });
   var map = new Map();
-  ranked.forEach(function(g, i){ map.set(g.k, SERIES_COLORS[i % SERIES_COLORS.length]); });
+  order.forEach(function(k, i){ map.set(k, SERIES_COLORS[i % SERIES_COLORS.length]); });
   return map;
 }
 // Every distinct group is its own slice — no top-N cap, no "N more" catch-
@@ -2784,22 +2838,29 @@ function pieSetGrown(idx, grown){
 // The single "pick" implementation — reached from a pie slice click AND
 // from an unambiguous list row/group click (see wireListInteractions), so
 // both directions of the pie↔list link stay in sync through one path.
+// Toggles the "picked" look on whichever visual(s) represent slice idx —
+// the SVG wedge (chart view) and the grid button (buttons view) both
+// exist in the DOM at once (only one is `hidden`, see wirePieViewToggle),
+// so both are kept in sync regardless of which is currently shown —
+// switching views mid-pick doesn't lose the selection's visual state.
+function pieSetPickedClass(idx, on){
+  var path = pieState.svg && pieState.svg.querySelector('path[data-idx="'+idx+'"]');
+  if (path) path.classList.toggle("picked", on);
+  var btnHost = document.getElementById("epPieButtons");
+  var btn = btnHost && btnHost.querySelector('.eppie-btn[data-idx="'+idx+'"]');
+  if (btn) btn.classList.toggle("picked", on);
+}
 function pieTogglePick(idx){
-  if (!pieState.svg || idx < 0 || idx >= pieState.slices.length) return;
+  if (idx < 0 || idx >= pieState.slices.length) return;
   if (pieState.pickedIdx === idx){
-    var path = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
-    if (path) path.classList.remove("picked");
+    pieSetPickedClass(idx, false);
     pieState.pickedIdx = null;
     pieShowTotal();
     highlightPieListSlice(pieState.mode, null);
   } else {
-    if (pieState.pickedIdx !== null){
-      var prevPath = pieState.svg.querySelector('path[data-idx="'+pieState.pickedIdx+'"]');
-      if (prevPath) prevPath.classList.remove("picked");
-    }
+    if (pieState.pickedIdx !== null) pieSetPickedClass(pieState.pickedIdx, false);
     pieState.pickedIdx = idx;
-    var newPath = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
-    if (newPath) newPath.classList.add("picked");
+    pieSetPickedClass(idx, true);
     pieShowSlice(pieState.slices[idx]);
     highlightPieListSlice(pieState.mode, pieState.slices[idx]);
   }
@@ -2898,7 +2959,7 @@ function renderPieList(recs){
     var groupPns = items.slice(i, j + 1).map(function(it){ return it.pn; }).join("|");
     var color = colorMap.get(items[i].project) || "var(--slate)";
     var colorStyle = "--frame-color:" + color;
-    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" style="grid-row:'+gridRow+' / span '+groupLen+'; grid-column:1/-1; '+colorStyle+'"></span>');
+    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'" style="grid-row:'+gridRow+' / span '+groupLen+'; grid-column:1/-1; '+colorStyle+'"></span>');
     for (var k = i; k <= j; k++){
       var it = items[k], r = gridRow + (k - i);
       out.push(
@@ -2956,6 +3017,25 @@ function wireListInteractions(host){
     });
   });
 }
+// Alternative to the donut for the same slices — one button per group,
+// 5 to a row (fewer on narrow screens, see CSS), scrolling if there are
+// more than fit. Each button is unambiguously one slice (unlike a list
+// click, a button never represents "a whole multi-P/N group"), so a
+// click always just picks it via the same pieTogglePick the chart uses.
+function renderPieButtons(slices){
+  var host = document.getElementById("epPieButtons");
+  if (!slices.length){
+    host.innerHTML = '<div class="empty"><b>Nothing to show</b>No quantities in this sheet.</div>';
+    return;
+  }
+  host.innerHTML = slices.map(function(sl, idx){
+    return '<button type="button" class="eppie-btn" data-idx="'+idx+'" style="--frame-color:'+sl.color+'" title="'+esc(sl.key)+'">'+
+      '<i></i><span>'+esc(sl.key)+'</span></button>';
+  }).join("");
+  host.querySelectorAll(".eppie-btn").forEach(function(b){
+    b.addEventListener("click", function(){ pieTogglePick(+b.dataset.idx); });
+  });
+}
 function renderPie(){
   // Always the whole sheet, in its own row order — not state.filtered
   // (that's the bottom table's filtered/date-sorted view, see §8).
@@ -2964,6 +3044,7 @@ function renderPie(){
   var slices = pieSlices(recs, state.pieMode);
   var total = slices.reduce(function(s, x){ return s + Math.max(0, x.qty); }, 0);
   renderPieChart(slices, total, state.pieMode);
+  renderPieButtons(slices);
 }
 function wirePieToggle(){
   var box = document.getElementById("epPieToggle");
@@ -2977,6 +3058,24 @@ function wirePieToggle(){
   });
 }
 wirePieToggle();
+// Chart vs Buttons is purely a display choice — both are always rendered
+// (renderPie renders both every time), this just shows one and hides the
+// other, so switching views never needs a re-render or loses pick state.
+function wirePieViewToggle(){
+  var box = document.getElementById("epPieViewToggle");
+  var chartEl = document.getElementById("epPieChart");
+  var buttonsEl = document.getElementById("epPieButtons");
+  box.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click", function(){
+      if (b.getAttribute("aria-pressed") === "true") return;
+      box.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      var isChart = b.dataset.view === "chart";
+      chartEl.hidden = !isChart;
+      buttonsEl.hidden = isChart;
+    });
+  });
+}
+wirePieViewToggle();
 
 // Drag the divider between the item list and the pie to resize their
 // split — the list pane gets a pinned px width (min 220px, max 78% of
