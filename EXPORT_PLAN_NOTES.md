@@ -593,6 +593,87 @@ A third round of feedback the same day, on the pie + list from §5.2/§5.3:
   usually fine but not worth the risk of a subtle browser-version-specific
   misplacement in hand-verified code with no test framework.
 
+### 5.5 Fourth round: no cap on slices, a much bigger pie, framed/linked groups
+
+- **The Top-7 + "N more" cap is gone.** The user's objection wasn't to the
+  cap as such but to the bucket having no identity ("it's supposed to be a
+  project or a P/N") — so `pieSlices()` now returns one slice per distinct
+  group, full stop, no `PIE_TOP_N`/`PIE_OTHER_COLOR`/`isOther`/`otherKeys`.
+  Colors still cycle the 7-slot palette past 7 groups
+  (`SERIES_COLORS[i % 7]`) — same scheme `buildProjectColorMap` already
+  used for the list's swatches, so a real dataset with, say, 17 distinct
+  P/Ns just repeats hues past the 7th rather than graying anything out.
+  Removing the cap immediately surfaced a labeling problem: many small
+  slices clustered on one side of the donut produced overlapping label
+  text. Fixed with a small decluttering pass in `renderPieChart` — collect
+  every label's natural position, split into the right half/left half (by
+  `dir = cos(am) >= 0`), sort each half top-to-bottom by y, and push any
+  label down that's within 13px of the one above it in its half. The
+  leader line gained a third point (an elbow at the *original* x, *nudged*
+  y) so it still visually starts from the slice and bends over to the
+  final label position rather than pointing at a spot the label isn't
+  at. This is a one-pass top-down push, not true force-directed layout —
+  fine for the realistic slice counts here (tens, not hundreds), but a
+  dataset with a great many same-side thin slices could still push labels
+  past the canvas edge; nobody has hit that yet.
+- **The pie is much bigger — by design, not by accident.** Two changes
+  compound: the list column went from flexible-and-wide to a fixed
+  `300px` (`.eppie-grid{grid-template-columns:300px 1fr}`, chart column
+  now gets whatever's left, `1fr`), and the SVG's own `viewBox` shrank
+  from a generously-margined 520×400 down to a tightly-measured 500×290
+  (`cx=250, cy=145, rOuter=118` unchanged) — the earlier version left a
+  lot of unused vertical canvas (only ~132 of the 200px half-height above/
+  below center was ever reachable by a label), so tightening the margin
+  to what labels actually need let the same `rOuter` render much larger
+  once scaled up by CSS. `.eppie-chart svg{max-width:950px}` (from 480px)
+  is what actually stretches it — on a typical desktop width the donut's
+  rendered diameter roughly doubled. `--eppie-h` (the shared column
+  height) grew to match (620px desktop, stepped down at the existing
+  1180/900/640px breakpoints), and the 900px breakpoint's `max-width` also
+  grew (700px) since the stacked single-column layout has the full page
+  width to itself there.
+- **Groups are visibly framed, and hovering marks the whole group** — a
+  new `.epsl-frame` element (`border:1px solid var(--line-strong)`,
+  `pointer-events:none` so it never steals the click/hover from the cells
+  stacked on top of it) is emitted for every group of 2+ rows, positioned
+  with the same `grid-row: start / span N` trick as the merged Value
+  cell, but spanning `grid-column: 1/-1` (the whole row width) instead.
+  Every cell belonging to a group (frame included) shares a `data-group`
+  index, assigned sequentially in `renderPieList` (including groups of
+  size 1, which just don't get a rendered frame element). Hover is wired
+  generically over every `[data-group]` element post-render
+  (`wireListInteractions`): entering any member adds `.grouphover` to
+  every element sharing that index, in one query — this is what lets a
+  1px-bordered, pointer-events-none frame still visually react, since its
+  own class is toggled by its sibling cells' hover, not by hovering the
+  frame itself (which wouldn't receive the event anyway).
+- **Clicking a list row now picks the matching pie slice — the reverse of
+  the existing pie→list link.** This forced the pie's pick/hover state out
+  of `renderPieChart`'s local closures and into a module-level `pieState`
+  object (`slices`, `total`, `mode`, `pickedIdx`, `geom`, plus cached
+  `svg`/`centerVal`/`centerLab` refs) with free functions
+  (`pieShowTotal`, `pieShowSlice`, `pieSetGrown`, `pieTogglePick`,
+  `pieFindSliceIndex`) operating on it — both the pie's own path-click
+  handler and the list's cell-click handler now call the same
+  `pieTogglePick(idx)`, so there's exactly one place that owns "what's
+  currently picked" regardless of which side triggered it. A list click
+  resolves its target slice by `pieState.mode`: the clicked cell's
+  `data-project` in Project mode, or the *first* `|`-joined P/N in
+  `data-pn` in P/N mode (a merged Value cell or a Project cell in a
+  multi-P/N group carries several P/Ns — clicking picks a specific one
+  rather than being a no-op).
+- **The donut's center label now also shows the picked/hovered slice's
+  money total**, not just qty and share — `sliceMoneyTotal(recs, mode,
+  sl)` sums each *matching record's* `value` once (not once per P/N line,
+  so a 3-P/N record matching a Project slice — or matching one of its own
+  P/Ns in P/N mode — still only contributes its value a single time).
+  Requested after the user picked a multi-row project slice and only
+  wanted to see one row highlighted plus a total — the highlighting itself
+  was already correct (every cell whose `data-project`/`data-pn` matches
+  lights up, which for a 3-row project group is 9 cells + the merged
+  Value cell = 10), so the real gap was the missing money figure, now
+  `pct% · $total` on the label's second line.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
