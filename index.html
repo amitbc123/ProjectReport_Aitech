@@ -494,9 +494,11 @@
      and its label) without touching the list; a click *picks* it,
      driving the list highlight — and the reverse also works:
      clicking a list row/group picks the matching slice on the pie.
-     Consecutive same-project rows are visibly framed as one group
-     (`.epsl-frame`) and hovering anywhere in that frame highlights
-     the whole group. The list has no wrapper div per row —
+     Every group (including a group of one) is visibly framed in its
+     own project color (`--frame-color`, set inline per group and
+     consumed by `.epsl-frame`/`.epsl-cell`), and hovering or
+     clicking anywhere in it marks the whole group, never a single
+     row inside it. The list has no wrapper div per row —
      `.eppie-listscroll` is itself one CSS grid and every cell
      carries an explicit grid-row, so the Project/Value cell can
      span multiple rows for a merged group — a true merged cell,
@@ -524,17 +526,20 @@
   }
   .eppie-listscroll .empty{grid-column:1/-1}
   .epsl-frame{
-    border:1px solid var(--line-strong); border-radius:6px; pointer-events:none;
+    border:1.5px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; pointer-events:none;
     transition:background .12s, border-color .12s;
   }
-  .epsl-frame.grouphover{border-color:var(--gold); background:rgba(169,125,24,.05)}
+  .epsl-frame.grouphover{border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 12%, white)}
+  .epsl-frame.hl{border-width:2px; border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 20%, white)}
   .epsl-cell{
     display:flex; align-items:center; min-width:0; cursor:pointer;
     padding:7px 0; font-size:12.5px; border-bottom:1px solid #F4F5F7;
     transition:background .12s;
   }
-  .epsl-cell.grouphover{background:rgba(169,125,24,.05)}
-  .epsl-cell.hl{background:var(--gold-tint)}
+  .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 10%, white)}
+  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 20%, white)}
   .epsl-proj{grid-column:1}
   .epsl-pn{grid-column:2}
   .epsl-qty{grid-column:3; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
@@ -559,16 +564,17 @@
     flex:1 1 auto; min-width:180px;
     padding:14px 20px 10px;
   }
-  .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0}
-  .eppie-chartscroll{flex:1; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
-  .eppie-chart{width:100%; display:flex; justify-content:center}
-  .eppie-chart svg{display:block; width:100%; max-width:420px; height:auto}
+  .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0; flex:0 0 auto}
+  /* The chart fills whatever box is left in the column after the toggle —
+     both eppie-chart and its svg are sized 100%/100% of that box (not a
+     fixed max-width), and the SVG's own viewBox aspect ratio + default
+     preserveAspectRatio="xMidYMid meet" does the "fit without distorting"
+     part, so the donut is always as big as the available space allows. */
+  .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
+  .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
+  .eppie-chart svg{display:block; width:100%; height:100%}
   .eppie-chart path{cursor:pointer; outline:none}
   .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
-  .epslice-label{opacity:0; transition:opacity .1s}
-  .epslice-label.show{opacity:1}
-  .epslice-label text{user-select:none}
-  .epslice-label polyline{opacity:.7}
 
   @media (max-width:1180px){
     .eppie-grid{--eppie-h:360px}
@@ -577,7 +583,6 @@
     .eppie-grid{flex-direction:column; --eppie-h:340px}
     .eppie-list-col{flex-basis:auto !important; width:auto !important; max-width:none; border-right:0; border-bottom:1px solid var(--line)}
     .eppie-resizer{display:none}
-    .eppie-chart svg{max-width:340px}
   }
   @media (max-width:640px){
     .eppie-grid{--eppie-h:300px}
@@ -2661,7 +2666,7 @@ function renderKpis(){
    ============================================================ */
 var SERIES_COLORS = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)"];
 var PIE_HOVER_GROW = 9;
-var pieState = { slices:[], total:0, mode:"pn", pickedIdx:null, geom:null, svg:null, centerVal:null, centerLab:null };
+var pieState = { slices:[], total:0, mode:"pn", pickedIdx:null, geom:null, svg:null, centerVal:null, centerLab:null, caption:null };
 function groupByProject(recs){
   var m = new Map();
   recs.forEach(function(r){
@@ -2725,8 +2730,12 @@ function sliceMoneyTotal(recs, mode, sl){
   });
   return sum;
 }
+// Slice-based list highlight — used when the *pie side* is the one
+// driving it (hover/pick on a wedge). Group-based highlight
+// (highlightPieListGroup, below) is what the *list side* uses instead,
+// since a multi-P/N group in P/N mode has no single matching slice.
 function highlightPieListSlice(mode, sl){
-  var cells = document.querySelectorAll("#epPieList .epsl-cell");
+  var cells = document.querySelectorAll("#epPieList .epsl-cell, #epPieList .epsl-frame");
   cells.forEach(function(c){ c.classList.remove("hl"); });
   if (!sl) return;
   var first = null;
@@ -2734,7 +2743,21 @@ function highlightPieListSlice(mode, sl){
     var matched = mode === "project"
       ? c.dataset.project === sl.key
       : (c.dataset.pn || "").split("|").indexOf(sl.key) !== -1;
-    if (matched){ c.classList.add("hl"); if (!first) first = c; }
+    if (matched){ c.classList.add("hl"); if (!first && c.classList.contains("epsl-cell")) first = c; }
+  });
+  if (first) first.scrollIntoView({ block:"nearest", behavior:"smooth" });
+}
+// Group-based list highlight, keyed by data-group rather than by slice —
+// this is what a list click always uses (see wireListInteractions), so a
+// multi-row group always highlights as a whole, never a single row inside
+// it. For a size-1 group this naturally highlights exactly that one row.
+function highlightPieListGroup(host, groupId){
+  host.querySelectorAll(".epsl-cell, .epsl-frame").forEach(function(c){ c.classList.remove("hl"); });
+  if (groupId == null) return;
+  var first = null;
+  host.querySelectorAll('[data-group="'+groupId+'"]').forEach(function(c){
+    c.classList.add("hl");
+    if (!first && c.classList.contains("epsl-cell")) first = c;
   });
   if (first) first.scrollIntoView({ block:"nearest", behavior:"smooth" });
 }
@@ -2742,6 +2765,7 @@ function pieShowTotal(){
   if (!pieState.centerVal) return;
   pieState.centerVal.textContent = nfInt.format(pieState.total);
   pieState.centerLab.textContent = "total qty";
+  if (pieState.caption) pieState.caption.textContent = "";
 }
 function pieShowSlice(sl){
   if (!pieState.centerVal) return;
@@ -2749,6 +2773,7 @@ function pieShowSlice(sl){
   var moneyTotal = sliceMoneyTotal(activeSheet().rows, pieState.mode, sl);
   pieState.centerVal.textContent = nfInt.format(sl.qty);
   pieState.centerLab.textContent = pct + "% · " + money(moneyTotal);
+  if (pieState.caption) pieState.caption.textContent = truncateLabel(sl.key, 30);
 }
 function pieSetGrown(idx, grown){
   var path = pieState.svg && pieState.svg.querySelector('path[data-idx="'+idx+'"]');
@@ -2756,35 +2781,25 @@ function pieSetGrown(idx, grown){
   var sl = pieState.slices[idx], g = pieState.geom;
   path.setAttribute("d", annularPath(g.cx, g.cy, g.rOuter + (grown ? PIE_HOVER_GROW : 0), g.rInner, sl._a0, sl._a1));
 }
-// Slice labels are hidden by default (see .epslice-label{opacity:0} —
-// the request was a clean donut at rest, name shown only for whichever
-// slice is currently hovered or picked).
-function pieSetLabelVisible(idx, visible){
-  var label = pieState.svg && pieState.svg.querySelector('.epslice-label[data-idx="'+idx+'"]');
-  if (label) label.classList.toggle("show", visible);
-}
 // The single "pick" implementation — reached from a pie slice click AND
-// from a list row/group click (see wireListInteractions), so both
-// directions of the pie↔list link stay in sync through one code path.
+// from an unambiguous list row/group click (see wireListInteractions), so
+// both directions of the pie↔list link stay in sync through one path.
 function pieTogglePick(idx){
   if (!pieState.svg || idx < 0 || idx >= pieState.slices.length) return;
   if (pieState.pickedIdx === idx){
     var path = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
     if (path) path.classList.remove("picked");
     pieState.pickedIdx = null;
-    pieSetLabelVisible(idx, false);
     pieShowTotal();
     highlightPieListSlice(pieState.mode, null);
   } else {
     if (pieState.pickedIdx !== null){
       var prevPath = pieState.svg.querySelector('path[data-idx="'+pieState.pickedIdx+'"]');
       if (prevPath) prevPath.classList.remove("picked");
-      pieSetLabelVisible(pieState.pickedIdx, false);
     }
     pieState.pickedIdx = idx;
     var newPath = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
     if (newPath) newPath.classList.add("picked");
-    pieSetLabelVisible(idx, true);
     pieShowSlice(pieState.slices[idx]);
     highlightPieListSlice(pieState.mode, pieState.slices[idx]);
   }
@@ -2793,18 +2808,23 @@ function pieFindSliceIndex(key){
   for (var i = 0; i < pieState.slices.length; i++) if (pieState.slices[i].key === key) return i;
   return -1;
 }
+// The donut fills whatever box its column gives it (see .eppie-chart
+// svg{width/height:100%} — no viewBox margin is spent on labels anymore:
+// a slice's name only ever shows in the caption band reserved below the
+// circle (pieShowSlice/pieShowTotal write into #epPieCaption), never next
+// to the wedge, so the circle itself gets nearly the whole canvas.
 function renderPieChart(slices, total, mode){
   var host = document.getElementById("epPieChart");
   pieState.slices = slices; pieState.total = total; pieState.mode = mode; pieState.pickedIdx = null;
   if (!total){
     host.innerHTML = '<div class="empty"><b>Nothing to chart</b>No quantities in this sheet.</div>';
-    pieState.svg = null; pieState.centerVal = null; pieState.centerLab = null; pieState.geom = null;
+    pieState.svg = null; pieState.centerVal = null; pieState.centerLab = null; pieState.caption = null; pieState.geom = null;
     return;
   }
-  var W = 500, H = 290, cx = 250, cy = 145, rOuter = 118, rInner = 56;
+  var W = 260, H = 280, cx = 130, cy = 122, rOuter = 104, rInner = 50;
   pieState.geom = { cx:cx, cy:cy, rOuter:rOuter, rInner:rInner };
   var a0 = -Math.PI/2;
-  var wedges = [], labelItems = [];
+  var wedges = [];
   slices.forEach(function(sl, idx){
     var frac = Math.max(0, sl.qty) / total;
     if (frac <= 0) return;
@@ -2815,34 +2835,13 @@ function renderPieChart(slices, total, mode){
       'd="'+annularPath(cx, cy, rOuter, rInner, a0, a1)+'" fill="'+sl.color+'" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round">'+
       '<title>'+esc(sl.key)+' · '+nfInt.format(sl.qty)+' ('+(frac*100).toFixed(1)+'%)</title></path>'
     );
-    var am = (a0 + a1) / 2, dir = Math.cos(am) >= 0 ? 1 : -1;
-    var p1 = polar(cx, cy, rOuter, am), p2 = polar(cx, cy, rOuter + 10, am);
-    labelItems.push({ idx:idx, key:sl.key, dir:dir, p1:p1, p2:p2, y:p2[1] });
     a0 = a1;
-  });
-  // Many small adjacent slices can put their labels within a few px of
-  // each other vertically — push apart within each side (right/left) of
-  // the donut, sorted top-to-bottom, so labels never overlap.
-  var rightLabels = labelItems.filter(function(it){ return it.dir > 0; }).sort(function(a,b){ return a.y - b.y; });
-  var leftLabels = labelItems.filter(function(it){ return it.dir < 0; }).sort(function(a,b){ return a.y - b.y; });
-  [rightLabels, leftLabels].forEach(function(list){
-    for (var i = 1; i < list.length; i++){
-      var minY = list[i-1].y + 13;
-      if (list[i].y < minY) list[i].y = minY;
-    }
-  });
-  var labels = labelItems.map(function(it){
-    var stubX = it.p2[0] + it.dir * 14;
-    return '<g class="epslice-label" data-idx="'+it.idx+'">' +
-        '<polyline points="'+it.p1[0]+','+it.p1[1]+' '+it.p2[0]+','+it.p2[1]+' '+it.p2[0]+','+it.y+' '+stubX+','+it.y+'" fill="none" stroke="var(--line-strong)" stroke-width="1"/>' +
-        '<text x="'+(stubX + it.dir*4)+'" y="'+(it.y+3.5)+'" text-anchor="'+(it.dir>0?"start":"end")+'" font-size="10.5" fill="var(--ink-2)">'+esc(truncateLabel(it.key, 13))+'</text>' +
-      '</g>';
   });
   var s = ['<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Quantity breakdown">'];
   s.push(wedges.join(""));
-  s.push(labels.join(""));
   s.push('<text id="epPieCenterVal" x="'+cx+'" y="'+(cy-3)+'" text-anchor="middle" font-size="25" font-weight="600" fill="var(--ink)">'+nfInt.format(total)+'</text>');
   s.push('<text id="epPieCenterLab" x="'+cx+'" y="'+(cy+17)+'" text-anchor="middle" font-size="11" fill="var(--faint)">total qty</text>');
+  s.push('<text id="epPieCaption" x="'+cx+'" y="'+(cy + rOuter + 30)+'" text-anchor="middle" font-size="12.5" fill="var(--ink-2)"></text>');
   s.push("</svg>");
   host.innerHTML = s.join("");
 
@@ -2850,18 +2849,11 @@ function renderPieChart(slices, total, mode){
   pieState.svg = svg;
   pieState.centerVal = svg.querySelector("#epPieCenterVal");
   pieState.centerLab = svg.querySelector("#epPieCenterLab");
+  pieState.caption = svg.querySelector("#epPieCaption");
   svg.querySelectorAll("path[data-idx]").forEach(function(path){
     var idx = +path.dataset.idx;
-    function preview(){
-      pieSetGrown(idx, true);
-      pieSetLabelVisible(idx, true);
-      if (pieState.pickedIdx === null) pieShowSlice(pieState.slices[idx]);
-    }
-    function unpreview(){
-      pieSetGrown(idx, false);
-      if (idx !== pieState.pickedIdx) pieSetLabelVisible(idx, false);
-      if (pieState.pickedIdx === null) pieShowTotal(); else pieShowSlice(pieState.slices[pieState.pickedIdx]);
-    }
+    function preview(){ pieSetGrown(idx, true); if (pieState.pickedIdx === null) pieShowSlice(pieState.slices[idx]); }
+    function unpreview(){ pieSetGrown(idx, false); if (pieState.pickedIdx === null) pieShowTotal(); else pieShowSlice(pieState.slices[pieState.pickedIdx]); }
     path.addEventListener("mouseenter", preview);
     path.addEventListener("mouseleave", unpreview);
     path.addEventListener("focus", preview);
@@ -2885,10 +2877,11 @@ function flattenItems(recs){
 // source record — see EXPORT_PLAN_NOTES.md §4.2) get ONE shared Value cell,
 // spanning their grid rows, instead of repeating the same figure on each —
 // a real merged cell (explicit grid-row per cell, see the CSS), not a
-// rowspan-look-alike. Every row also gets a per-project color swatch, and
-// every group (of 2+ rows) gets a visible frame (`.epsl-frame`) — every
-// cell/frame in a group shares a `data-group` id, used to mark the whole
-// group on hover and to pick the matching pie slice on click.
+// rowspan-look-alike. Every group — including a group of one — gets a
+// visible frame (`.epsl-frame`) tinted in its own project color via the
+// `--frame-color` custom property (set inline here, consumed by the CSS
+// for the frame itself and for its cells' hover/hl backgrounds), so the
+// whole group reads as one colored block, not just a small swatch dot.
 function renderPieList(recs){
   var host = document.getElementById("epPieList");
   var items = flattenItems(recs);
@@ -2904,21 +2897,20 @@ function renderPieList(recs){
     var groupLen = j - i + 1;
     var groupPns = items.slice(i, j + 1).map(function(it){ return it.pn; }).join("|");
     var color = colorMap.get(items[i].project) || "var(--slate)";
-    if (groupLen > 1){
-      out.push('<span class="epsl-frame" data-group="'+groupIdx+'" style="grid-row:'+gridRow+' / span '+groupLen+'; grid-column:1/-1"></span>');
-    }
+    var colorStyle = "--frame-color:" + color;
+    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" style="grid-row:'+gridRow+' / span '+groupLen+'; grid-column:1/-1; '+colorStyle+'"></span>');
     for (var k = i; k <= j; k++){
       var it = items[k], r = gridRow + (k - i);
       out.push(
-        '<span class="epsl-cell epsl-proj mono" style="grid-row:'+r+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">' +
+        '<span class="epsl-cell epsl-proj mono" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">' +
           '<i class="epsl-swatch" style="background:'+color+'"></i>' + esc(it.project || "—") +
         '</span>' +
-        '<span class="epsl-cell epsl-pn mono" style="grid-row:'+r+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+esc(it.pn || "—")+'</span>' +
-        '<span class="epsl-cell epsl-qty" style="grid-row:'+r+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'
+        '<span class="epsl-cell epsl-pn mono" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+esc(it.pn || "—")+'</span>' +
+        '<span class="epsl-cell epsl-qty" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'
       );
     }
     out.push(
-      '<span class="epsl-cell epsl-val'+(items[i].value<0?" neg":"")+(groupLen>1?" merged":"")+'" style="grid-row:'+gridRow+' / span '+groupLen+'" '+
+      '<span class="epsl-cell epsl-val'+(items[i].value<0?" neg":"")+(groupLen>1?" merged":"")+'" style="grid-row:'+gridRow+' / span '+groupLen+'; '+colorStyle+'" '+
       'data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'">'+money(items[i].value)+'</span>'
     );
     gridRow += groupLen;
@@ -2927,6 +2919,9 @@ function renderPieList(recs){
   }
   host.innerHTML = out.join("");
   wireListInteractions(host);
+}
+function groupRowCount(host, groupId){
+  return host.querySelectorAll('.epsl-proj[data-group="'+groupId+'"]').length;
 }
 function wireListInteractions(host){
   host.querySelectorAll("[data-group]").forEach(function(el){
@@ -2938,12 +2933,26 @@ function wireListInteractions(host){
       host.querySelectorAll('[data-group="'+g+'"]').forEach(function(x){ x.classList.remove("grouphover"); });
     });
   });
+  // A click always marks the WHOLE group it belongs to (never a single
+  // row inside a bigger group) — for a size-1 group that's just its one
+  // row. When the click also maps to exactly one pie slice (Project mode,
+  // always; P/N mode, only for a size-1 group), it picks that slice too,
+  // which happens to produce the identical highlight via
+  // highlightPieListSlice — so only the genuinely ambiguous case (P/N
+  // mode, multi-row group — several different P/N slices, no single one
+  // represents "the group") needs its own group-based highlight path.
   host.querySelectorAll(".epsl-cell").forEach(function(c){
     c.addEventListener("click", function(){
-      var key = pieState.mode === "project" ? c.dataset.project : (c.dataset.pn || "").split("|")[0];
-      if (!key) return;
-      var idx = pieFindSliceIndex(key);
-      if (idx !== -1) pieTogglePick(idx);
+      var groupId = c.dataset.group;
+      if (pieState.mode === "project" || groupRowCount(host, groupId) <= 1){
+        var key = pieState.mode === "project" ? c.dataset.project : (c.dataset.pn || "").split("|")[0];
+        var idx = key ? pieFindSliceIndex(key) : -1;
+        if (idx !== -1) pieTogglePick(idx);
+        return;
+      }
+      var alreadyOn = host.querySelector('.epsl-cell[data-group="'+groupId+'"].hl') !== null;
+      if (pieState.pickedIdx !== null) pieTogglePick(pieState.pickedIdx);
+      highlightPieListGroup(host, alreadyOn ? null : groupId);
     });
   });
 }

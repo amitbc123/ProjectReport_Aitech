@@ -728,6 +728,83 @@ themselves rather than have it hardcoded either way:
   clean by default and the earlier decluttering pass (§5.5) rarely even
   gets exercised now that labels aren't all on-screen simultaneously.
 
+### 5.7 Sixth round: the pie was still too small for the space it had, labels move below it, group clicks fixed
+
+The §5.6 walk-back overshot in the other direction: a screenshot showed a
+donut sitting in the middle of a mostly-empty panel, because
+`.eppie-chart svg{max-width:420px}` was an arbitrary cap that had nothing
+to do with how much room the column actually had. This round removes the
+cap entirely in favor of true fit-to-container sizing, moves the slice
+name out of the leader-line system (gone) into a caption reserved below
+the donut, and fixes two real bugs in the list's click behavior that
+surfaced once someone was actually using it.
+
+- **The donut now fills its box, full stop.** `.eppie-chart` and
+  `.eppie-chart svg` are both `width:100%; height:100%` (no `max-width`
+  anywhere, no per-breakpoint override) inside `.eppie-chartscroll`
+  (`flex:1`, so it's exactly "whatever's left in the column after the
+  toggle"). The SVG's own `viewBox` plus the default
+  `preserveAspectRatio="xMidYMid meet"` (never set explicitly — it's the
+  SVG spec default) does the "scale to fit both axes without distorting,
+  centered" part for free; no JS measurement or resize-observer needed.
+  Verified: `getBoundingClientRect()` on the svg and on
+  `.eppie-chartscroll` return the *same* box.
+- **Slice labels don't sit next to the wedge anymore — there's no leader
+  line at all now.** The whole labelItems/decluttering/polyline system
+  from §5.5 is deleted. Instead, a single `<text id="epPieCaption">` sits
+  in a reserved band below the circle (`y = cy + rOuter + 30`, inside a
+  viewBox — 260×280, `cx=130, cy=122, rOuter=104` — sized so that band
+  exists at all). `pieShowSlice`/`pieShowTotal` (already the single place
+  that updates the center qty/%/money text) now also write the caption —
+  the slice's key on `pieShowSlice`, empty string on `pieShowTotal` — so
+  hover-preview and pick already drove the caption for free once those
+  two functions were extended; no separate show/hide wiring was needed
+  this time (contrast with §5.6's `pieSetLabelVisible`, now deleted along
+  with the labels it toggled). Freeing the viewBox from label margins is
+  also *why* the geometry shrank from 500×290 to 260×280 — that's not a
+  smaller donut, it's a tighter box around the same-shaped donut, which
+  is what let removing the CSS max-width actually render bigger instead
+  of just filling wasted margin.
+- **Every group now gets a frame — including a group of one** — the
+  `groupLen > 1` guard on emitting `.epsl-frame` is gone, so a lone P/N
+  under a project gets exactly the same colored box as a 3-line group,
+  just sized to one row. The frame's border/background color comes from
+  a `--frame-color` custom property set inline per group (from
+  `buildProjectColorMap`, same as the swatch dot already used) and
+  consumed by shared CSS via `color-mix(in srgb, var(--frame-color) N%,
+  white)` — this is what lets one set of hover/hl rules brighten *any*
+  group's frame in *that group's own* color without per-instance CSS.
+  `color-mix()` is a modern-Chromium-only feature; acceptable here since
+  this whole app is verified against the pre-installed headless Chromium
+  only (see §7), not a cross-browser target.
+- **Two real bugs, both about what a list click actually marks.** The
+  request was explicit: clicking inside a group should always mark the
+  *whole* group, never a single row picked out of it — group size 1
+  marks that one row (trivially, since the group *is* that row).
+  Previously, `wireListInteractions`'s click handler resolved a cell to a
+  single P/N or project key and called `pieTogglePick`, which (correctly)
+  highlights every cell matching *that key* — fine in Project mode or for
+  a size-1 group (the group and the slice are the same set of cells by
+  construction), but wrong in P/N mode for a multi-P/N group: clicking
+  one P/N line only lit up that one row + the shared Value cell, not the
+  other P/N lines sitting right next to it in the same visibly-framed
+  block. Root cause: a multi-P/N group in P/N mode doesn't correspond to
+  any *single* pie slice — its P/Ns are separate slices — so there was
+  never a "pick" call that could represent "the whole group" in that
+  mode. Fixed with `highlightPieListGroup(host, groupId)`, a
+  `data-group`-keyed sibling to the existing `data-project`/`data-pn`-
+  keyed `highlightPieListSlice`: the click handler now checks
+  `pieState.mode === "project" || groupRowCount(...) <= 1` — the
+  unambiguous case, where a single pie slice really does represent the
+  whole click target, so it still goes through `pieTogglePick` exactly as
+  before (which happens to produce an identical highlight to the group
+  path, since the two sets of matching cells are the same set in that
+  case) — and falls back to `highlightPieListGroup` otherwise, clearing
+  any unrelated pie pick first (`pieTogglePick(pieState.pickedIdx)` on
+  the *current* picked index toggles it off) so the pie never shows a
+  stale, unrelated selection next to a list group that has nothing to do
+  with it.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
