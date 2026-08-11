@@ -509,6 +509,90 @@ A second round of feedback on §5.2, addressed the same day:
   nearest positioned ancestor — dropping position entirely would let the
   dropdown escape to whatever ancestor *is* positioned and mis-place it.
 
+### 5.4 Third round: direct labels, hover vs. click split, per-project colors, merged value cells
+
+A third round of feedback the same day, on the pie + list from §5.2/§5.3:
+
+- **Every slice is now direct-labelled**, not just tooltip-on-hover: a thin
+  leader line (outer edge → a short radial step → a horizontal stub) ends
+  at the slice's key, truncated to 13 chars with `truncateLabel`. This is
+  why the SVG's own coordinate space grew to a 520×400 `viewBox` (`cx=260,
+  cy=200, rOuter=118, rInner=56`) even though the *rendered* pie itself is
+  about the same size as before — the extra canvas is label margin on every
+  side, since a slice can sit anywhere around the circle. The `<svg>` has
+  no `width`/`height` attributes anymore, only the viewBox — CSS
+  (`.eppie-chart svg{width:100%; max-width:480px; height:auto}`) scales it
+  to fit the column while keeping the label margins proportional at every
+  size, which is also what makes the mobile shrink
+  (`max-width:340px` at 640px) a one-line CSS change instead of a second
+  hand-computed geometry.
+- **Hover and click now do different things**, on request — previously
+  hover drove the list highlight, which the user found the wrong trigger:
+  - **Hover (or keyboard focus)** only *previews*: the slice's path `d` is
+    regenerated with `rOuter + PIE_HOVER_GROW` (9px) — geometry, not a CSS
+    `transform: scale()`, because scaling an annular sector from the donut
+    center moves the *inner* edge too and dents the hole; regenerating the
+    path keeps `rInner` fixed and only the outer edge moves. The center
+    label swaps to the hovered slice's qty/share for the duration of the
+    hover, unless a slice is picked (next bullet) — then hovering a
+    *different* slice still previews it, but releasing the hover reverts to
+    the *picked* slice's label, not the total.
+  - **Click "picks" a slice** (toggles — clicking the same slice again
+    un-picks it, clicking a different one moves the pick). Picking is what
+    drives `highlightPieListSlice()` — the `.hl` class on matching
+    `#epPieList .epsl-cell` elements, and the `scrollIntoView` of the first
+    match — and adds a `.picked` class to the path (`stroke:var(--ink);
+    stroke-width:3px`) as the persistent "this one's selected" indicator.
+    Keyboard users get the same toggle via Enter/Space (`keydown` on each
+    `tabindex="0"` path).
+  - The stray rectangle the user saw on click was the browser's default
+    SVG focus outline (`outline: 2px solid var(--gold)` on
+    `:focus-visible` in the previous round) — `outline` on an SVG path
+    always draws the element's *bounding box*, not the path shape, which
+    reads as a random square over a donut wedge. Removed outright
+    (`.eppie-chart path{outline:none}`); the `.picked` stroke (which does
+    follow the wedge's actual shape) is the only "this is the selected
+    one" affordance now.
+- **Every row in the item list gets a per-project color swatch**
+  (`buildProjectColorMap`, a small `<i class="epsl-swatch">` before the
+  Project text), ranked and colored the same way `groupByProject` ranks
+  for the pie (by qty desc, `SERIES_COLORS[i % 7]`) — so two rows sharing
+  a project always share a color, and a project with only one P/N line
+  still gets its own color, not gray. This is independent of the pie's
+  current mode: in P/N mode the pie's own slice colors encode *P/N*
+  identity while the list's swatches simultaneously encode *project*
+  identity — two different color systems on screen at once by design,
+  since they answer different questions.
+- **Rows sharing a project get one merged Value cell**, not a repeated
+  figure — requested separately, mid-round, after seeing the same dollar
+  amount printed on every P/N line of a multi-P/N project. "Same project"
+  here means *consecutive* rows only (never rows reordered from elsewhere
+  in the list) — in practice this is exactly one source record's several
+  P/N lines, which is the only case where the value is genuinely identical
+  by the data model (§4.2: value belongs to the whole row, not a P/N).
+  Implementing a real spanning cell forced a structural change:
+  `#epPieList` used to be one flex column of `.epsl-row` divs, each its
+  own 4-column grid; it's now a *single* CSS grid
+  (`.eppie-listscroll{display:grid; grid-template-columns:1.1fr 1.3fr .7fr
+  .9fr}`) and `renderPieList` emits flat `.epsl-cell` spans with an
+  explicit `grid-row` (and an implicit `grid-column` from each cell's own
+  class, `.epsl-proj{grid-column:1}` etc.) instead of row wrapper divs.
+  For a group of *N* consecutive same-project rows, the Project/P·N/Qty
+  cells still render N times (one per row), but the Value cell renders
+  **once**, positioned `grid-row: <start> / span N` — a genuine merged
+  cell (vertically centered by the cell's own `align-items:center`), not
+  N repeated numbers or a rowspan-look-alike. It also carries every
+  member P/N in its `data-pn`, `|`-joined (`groupPns`), so that clicking a
+  P/N slice for *any* one of the group's P/Ns still correctly highlights
+  the shared Value cell along with that specific P/N's own row. A
+  `.merged` class adds a `border-left` "bracket" as a visible cue that the
+  figure spans more than one row. Explicit `grid-row`/`grid-column` on
+  every cell (rather than leaning on CSS Grid's auto-placement to skip
+  around the spanned cell) was a deliberate choice to keep this
+  deterministic — auto-placement interacting with an explicit span is
+  usually fine but not worth the risk of a subtle browser-version-specific
+  misplacement in hand-verified code with no test framework.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies

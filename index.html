@@ -481,10 +481,16 @@
      Two columns, equal height: a scrollable Project/P·N/Qty/Value
      list on the left (in the sheet's own row order — see
      renderPieList), a P/N-or-Project quantity pie on the right
-     with a toggle above it. No separate legend: hovering (or
-     focusing) a slice swaps the donut's center label to that
-     slice's qty/share and highlights the matching row(s) in the
-     list instead — the list itself is the "legend".
+     with a toggle above it. Every slice is direct-labelled with a
+     leader line; hover grows a slice (regenerating its path with
+     a bigger outer radius, not a CSS transform — a transform would
+     scale the inner edge too and distort the donut hole); a click
+     "picks" a slice, which is what drives the list highlight (not
+     hover — hover is preview-only). The list has no wrapper div
+     per row: `.eppie-listscroll` is itself one CSS grid and every
+     cell carries an explicit grid-row, so a Project/Value cell can
+     span multiple rows when consecutive rows share a project (see
+     renderPieList) — a true merged cell, not a repeated number.
      ============================================================ */
   .eppie-wrap{margin-top:22px}
   .eppie-grid{
@@ -501,38 +507,49 @@
     font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint);
   }
   .epsl-head span:nth-child(n+3){text-align:right}
-  .eppie-listscroll{flex:1; overflow-y:auto; scrollbar-width:thin}
-  .epsl-row{
-    display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:8px; align-items:center;
-    padding:7px 16px; font-size:12.5px; border-bottom:1px solid #F4F5F7;
+  .eppie-listscroll{
+    flex:1; overflow-y:auto; scrollbar-width:thin;
+    display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:0 8px;
+    padding:0 16px; align-content:start;
+  }
+  .eppie-listscroll .empty{grid-column:1/-1}
+  .epsl-cell{
+    display:flex; align-items:center; min-width:0;
+    padding:7px 0; font-size:12.5px; border-bottom:1px solid #F4F5F7;
     transition:background .12s;
   }
-  .epsl-row:hover{background:#F8F9FA}
-  .epsl-row.hl{background:var(--gold-tint)}
-  .epsl-proj,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
-  .epsl-qty{text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
-  .epsl-val{text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
+  .epsl-cell.hl{background:var(--gold-tint)}
+  .epsl-proj{grid-column:1}
+  .epsl-pn{grid-column:2}
+  .epsl-qty{grid-column:3; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
+  .epsl-val{grid-column:4; justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
   .epsl-val.neg{color:var(--rose)}
+  .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
+  .epsl-proj,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
+  .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
   .eppie-chart-col{
     display:flex; flex-direction:column; height:var(--eppie-h);
     padding:14px 16px 10px;
   }
   .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0}
-  .eppie-chartscroll{flex:1; min-height:0; display:flex; justify-content:center; align-items:center}
-  .eppie-chart svg{display:block}
-  .eppie-chart path{cursor:pointer; transition:filter .1s, stroke-width .1s}
-  .eppie-chart path.hover{filter:brightness(1.08); stroke-width:3px}
-  .eppie-chart path:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+  .eppie-chartscroll{flex:1; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
+  .eppie-chart{width:100%; display:flex; justify-content:center}
+  .eppie-chart svg{display:block; width:100%; max-width:480px; height:auto}
+  .eppie-chart path{cursor:pointer; outline:none}
+  .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
+  .epslice-label text{user-select:none}
+  .epslice-label polyline{opacity:.7}
 
   @media (max-width:900px){
-    .eppie-grid{grid-template-columns:1fr; --eppie-h:320px}
+    .eppie-grid{grid-template-columns:1fr; --eppie-h:340px}
     .eppie-list-col{border-right:0; border-bottom:1px solid var(--line)}
   }
   @media (max-width:640px){
-    .eppie-grid{--eppie-h:300px}
-    .epsl-head,.epsl-row{padding-left:12px; padding-right:12px}
+    .eppie-grid{--eppie-h:320px}
+    .epsl-head{padding-left:12px; padding-right:12px}
+    .eppie-listscroll{padding:0 12px}
     .eppie-chart-col{padding:12px 12px 8px}
-    .eppie-chart svg{width:210px; height:210px}
+    .eppie-chart svg{max-width:340px}
   }
 
   /* ============================================================
@@ -2601,14 +2618,18 @@ function renderKpis(){
    ------------------------------------------------------------
    Both panels always reflect the *whole* active sheet, in the
    sheet's own row order — independent of the bottom table's
-   filters (§8) and of which pie mode is selected. There's no
-   separate legend: hovering/focusing a slice swaps the donut's
-   center label to that slice's qty + share, and highlights the
-   matching row(s) in the list (scrolling the first into view).
+   filters (§8) and of which pie mode is selected. Every slice
+   carries a direct label (leader line + key). Hovering a slice
+   only *previews* it: the slice grows and the center label shows
+   its qty/share, but nothing in the list changes. Clicking a
+   slice "picks" it — that's what highlights the matching row(s)
+   in the list and pins the center label until it's un-picked
+   (click again, or pick another slice).
    ============================================================ */
 var SERIES_COLORS = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)"];
 var PIE_OTHER_COLOR = "var(--slate)";
 var PIE_TOP_N = 7;
+var PIE_HOVER_GROW = 9;
 function groupByProject(recs){
   var m = new Map();
   recs.forEach(function(r){
@@ -2631,6 +2652,17 @@ function groupByPN(recs){
   });
   return Array.from(m.values()).sort(function(a,b){ return b.qty - a.qty; });
 }
+// One color per distinct project, ranked the same way groupByProject ranks
+// them (by qty desc) — every project gets its own color (even a project
+// with a single P/N line), consistent no matter which pie mode is active,
+// used only by the item list (§ renderPieList), never by the pie itself
+// when it's in P/N mode.
+function buildProjectColorMap(recs){
+  var ranked = groupByProject(recs);
+  var map = new Map();
+  ranked.forEach(function(g, i){ map.set(g.k, SERIES_COLORS[i % SERIES_COLORS.length]); });
+  return map;
+}
 function pieSlices(recs, mode){
   var groups = mode === "project" ? groupByProject(recs) : groupByPN(recs);
   var top = groups.slice(0, PIE_TOP_N);
@@ -2651,55 +2683,98 @@ function annularPath(cx, cy, rOuter, rInner, a0, a1){
   return "M"+p0[0]+","+p0[1]+" A"+rOuter+","+rOuter+" 0 "+large+" 1 "+p1[0]+","+p1[1]+
          " L"+p2[0]+","+p2[1]+" A"+rInner+","+rInner+" 0 "+large+" 0 "+p3[0]+","+p3[1]+" Z";
 }
+function truncateLabel(s, max){ return s.length > max ? s.slice(0, max - 1) + "…" : s; }
+function highlightPieListSlice(mode, sl){
+  var cells = document.querySelectorAll("#epPieList .epsl-cell");
+  cells.forEach(function(c){ c.classList.remove("hl"); });
+  if (!sl) return;
+  var matchSet = sl.isOther ? new Set(sl.otherKeys) : new Set([sl.key]);
+  var first = null;
+  cells.forEach(function(c){
+    var matched = mode === "project"
+      ? matchSet.has(c.dataset.project)
+      : (c.dataset.pn || "").split("|").some(function(x){ return matchSet.has(x); });
+    if (matched){ c.classList.add("hl"); if (!first) first = c; }
+  });
+  if (first) first.scrollIntoView({ block:"nearest", behavior:"smooth" });
+}
 function renderPieChart(slices, total, mode){
   var host = document.getElementById("epPieChart");
   if (!total){
     host.innerHTML = '<div class="empty"><b>Nothing to chart</b>No quantities in this sheet.</div>';
     return;
   }
-  var size = 268, cx = size/2, cy = size/2, rOuter = 126, rInner = 60;
+  var W = 520, H = 400, cx = 260, cy = 200, rOuter = 118, rInner = 56;
   var a0 = -Math.PI/2;
-  var s = ['<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" role="img" aria-label="Quantity breakdown">'];
+  var wedges = [], labels = [];
   slices.forEach(function(sl, idx){
     var frac = Math.max(0, sl.qty) / total;
     if (frac <= 0) return;
     var a1 = a0 + Math.min(frac, 0.9999) * Math.PI * 2;
-    s.push('<path data-idx="'+idx+'" tabindex="0" d="'+annularPath(cx, cy, rOuter, rInner, a0, a1)+'" fill="'+sl.color+'" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round">'+
-      '<title>'+esc(sl.key)+' · '+nfInt.format(sl.qty)+' ('+(frac*100).toFixed(1)+'%)</title></path>');
-    a0 += frac * Math.PI * 2;
+    sl._a0 = a0; sl._a1 = a1;
+    wedges.push(
+      '<path data-idx="'+idx+'" tabindex="0" role="button" aria-label="'+esc(sl.key)+', '+nfInt.format(sl.qty)+', '+(frac*100).toFixed(1)+'%" '+
+      'd="'+annularPath(cx, cy, rOuter, rInner, a0, a1)+'" fill="'+sl.color+'" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round">'+
+      '<title>'+esc(sl.key)+' · '+nfInt.format(sl.qty)+' ('+(frac*100).toFixed(1)+'%)</title></path>'
+    );
+    var am = (a0 + a1) / 2, dir = Math.cos(am) >= 0 ? 1 : -1;
+    var p1 = polar(cx, cy, rOuter, am), p2 = polar(cx, cy, rOuter + 10, am);
+    var stubX = p2[0] + dir * 14;
+    labels.push(
+      '<g class="epslice-label">' +
+        '<polyline points="'+p1[0]+','+p1[1]+' '+p2[0]+','+p2[1]+' '+stubX+','+p2[1]+'" fill="none" stroke="var(--line-strong)" stroke-width="1"/>' +
+        '<text x="'+(stubX + dir*4)+'" y="'+(p2[1]+3.5)+'" text-anchor="'+(dir>0?"start":"end")+'" font-size="10.5" fill="var(--ink-2)">'+esc(truncateLabel(sl.key, 13))+'</text>' +
+      '</g>'
+    );
+    a0 = a1;
   });
+  var s = ['<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Quantity breakdown">'];
+  s.push(wedges.join(""));
+  s.push(labels.join(""));
   s.push('<text id="epPieCenterVal" x="'+cx+'" y="'+(cy-3)+'" text-anchor="middle" font-size="23" font-weight="600" fill="var(--ink)">'+nfInt.format(total)+'</text>');
   s.push('<text id="epPieCenterLab" x="'+cx+'" y="'+(cy+16)+'" text-anchor="middle" font-size="10.5" fill="var(--faint)">total qty</text>');
   s.push("</svg>");
   host.innerHTML = s.join("");
-  wirePieHover(host, slices, total, mode);
-}
-function wirePieHover(host, slices, total, mode){
-  var centerVal = host.querySelector("#epPieCenterVal"), centerLab = host.querySelector("#epPieCenterLab");
-  var attr = mode === "project" ? "project" : "pn";
-  host.querySelectorAll("path[data-idx]").forEach(function(path){
+
+  var svg = host.querySelector("svg");
+  var centerVal = svg.querySelector("#epPieCenterVal"), centerLab = svg.querySelector("#epPieCenterLab");
+  var pickedIdx = null;
+  function showTotal(){ centerVal.textContent = nfInt.format(total); centerLab.textContent = "total qty"; }
+  function showSlice(sl){ centerVal.textContent = nfInt.format(sl.qty); centerLab.textContent = (sl.qty / total * 100).toFixed(1) + "%"; }
+  svg.querySelectorAll("path[data-idx]").forEach(function(path){
     var sl = slices[+path.dataset.idx];
-    var matchSet = sl.isOther ? new Set(sl.otherKeys) : new Set([sl.key]);
-    function enter(){
-      path.classList.add("hover");
-      centerVal.textContent = nfInt.format(sl.qty);
-      centerLab.textContent = (sl.qty / total * 100).toFixed(1) + "%";
-      var first = null;
-      document.querySelectorAll("#epPieList .epsl-row").forEach(function(r){
-        if (matchSet.has(r.dataset[attr])){ r.classList.add("hl"); if (!first) first = r; }
-      });
-      if (first) first.scrollIntoView({ block:"nearest", behavior:"smooth" });
+    var baseD = path.getAttribute("d");
+    function preview(){
+      path.setAttribute("d", annularPath(cx, cy, rOuter + PIE_HOVER_GROW, rInner, sl._a0, sl._a1));
+      if (pickedIdx === null) showSlice(sl);
     }
-    function leave(){
-      path.classList.remove("hover");
-      centerVal.textContent = nfInt.format(total);
-      centerLab.textContent = "total qty";
-      document.querySelectorAll("#epPieList .epsl-row.hl").forEach(function(r){ r.classList.remove("hl"); });
+    function unpreview(){
+      path.setAttribute("d", baseD);
+      if (pickedIdx === null) showTotal(); else showSlice(slices[pickedIdx]);
     }
-    path.addEventListener("mouseenter", enter);
-    path.addEventListener("mouseleave", leave);
-    path.addEventListener("focus", enter);
-    path.addEventListener("blur", leave);
+    function pick(){
+      if (pickedIdx === +path.dataset.idx){
+        path.classList.remove("picked");
+        pickedIdx = null;
+        showTotal();
+        highlightPieListSlice(mode, null);
+      } else {
+        if (pickedIdx !== null){
+          var prevPath = svg.querySelector('path[data-idx="'+pickedIdx+'"]');
+          if (prevPath) prevPath.classList.remove("picked");
+        }
+        pickedIdx = +path.dataset.idx;
+        path.classList.add("picked");
+        showSlice(sl);
+        highlightPieListSlice(mode, sl);
+      }
+    }
+    path.addEventListener("mouseenter", preview);
+    path.addEventListener("mouseleave", unpreview);
+    path.addEventListener("focus", preview);
+    path.addEventListener("blur", unpreview);
+    path.addEventListener("click", pick);
+    path.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } });
   });
 }
 function flattenItems(recs){
@@ -2713,6 +2788,12 @@ function flattenItems(recs){
   });
   return out;
 }
+// Consecutive rows sharing a project (almost always the several P/Ns of one
+// source record — see EXPORT_PLAN_NOTES.md §4.2) get ONE shared Value cell,
+// spanning their grid rows, instead of repeating the same figure on each —
+// a real merged cell (explicit grid-row per cell, see the CSS), not a
+// rowspan-look-alike. Every row also gets a per-project color swatch so
+// same-project rows read as one group at a glance, in P/N mode too.
 function renderPieList(recs){
   var host = document.getElementById("epPieList");
   var items = flattenItems(recs);
@@ -2720,14 +2801,32 @@ function renderPieList(recs){
     host.innerHTML = '<div class="empty"><b>No rows</b>No data in this sheet.</div>';
     return;
   }
-  host.innerHTML = items.map(function(it){
-    return '<div class="epsl-row" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+
-      '<span class="epsl-proj mono">'+esc(it.project || "—")+'</span>'+
-      '<span class="epsl-pn mono">'+esc(it.pn || "—")+'</span>'+
-      '<span class="epsl-qty">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'+
-      '<span class="epsl-val'+(it.value<0?" neg":"")+'">'+money(it.value)+'</span>'+
-    '</div>';
-  }).join("");
+  var colorMap = buildProjectColorMap(recs);
+  var out = [], gridRow = 1, i = 0;
+  while (i < items.length){
+    var j = i;
+    while (j + 1 < items.length && items[j+1].project === items[i].project) j++;
+    var groupLen = j - i + 1;
+    var groupPns = items.slice(i, j + 1).map(function(it){ return it.pn; }).join("|");
+    var color = colorMap.get(items[i].project) || PIE_OTHER_COLOR;
+    for (var k = i; k <= j; k++){
+      var it = items[k], r = gridRow + (k - i);
+      out.push(
+        '<span class="epsl-cell epsl-proj mono" style="grid-row:'+r+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">' +
+          '<i class="epsl-swatch" style="background:'+color+'"></i>' + esc(it.project || "—") +
+        '</span>' +
+        '<span class="epsl-cell epsl-pn mono" style="grid-row:'+r+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+esc(it.pn || "—")+'</span>' +
+        '<span class="epsl-cell epsl-qty" style="grid-row:'+r+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'
+      );
+    }
+    out.push(
+      '<span class="epsl-cell epsl-val'+(items[i].value<0?" neg":"")+(groupLen>1?" merged":"")+'" style="grid-row:'+gridRow+' / span '+groupLen+'" '+
+      'data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'">'+money(items[i].value)+'</span>'
+    );
+    gridRow += groupLen;
+    i = j + 1;
+  }
+  host.innerHTML = out.join("");
 }
 function renderPie(){
   // Always the whole sheet, in its own row order — not state.filtered
