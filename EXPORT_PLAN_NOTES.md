@@ -240,16 +240,17 @@ regex) — a documented quirk of one real file, not a general rule. If a
 future export ever adds a header row to "Old", `findHeaderMap` will find it
 first and the fallback path simply won't trigger.
 
-A sheet that has neither a header nor a wide-enough first row is left out of
-the loaded sheet list entirely (not shown as an empty tab), and the user
-gets a toast naming it, so nothing is silently dropped without being told.
-
-**Sheet ordering**: whatever sheet name *isn't* one of the three fixed names
-(`done`, `open issue with r&d`, `old`, case-insensitive) is treated as "the
-current one" and sorted first. This means the app needs no hardcoded
-knowledge of "JUNE 26" — next month's "JULY 26" sheet is picked up
-automatically as the default/first tab, exactly like the daily Project
-Report file's own month-rotation handling.
+**Only the current sheet is parsed** (August 2026 redesign — see §5). Sheet
+names are sorted, by name alone, *before* any parsing happens: whatever name
+*isn't* one of the three fixed names (`done`, `open issue with r&d`, `old`,
+case-insensitive) sorts first and is treated as "the current one". Only that
+one sheet is then passed to `parseSheet`. This means the app needs no
+hardcoded knowledge of "JUNE 26" — next month's "JULY 26" sheet is picked up
+automatically — and, as a side effect, the `"Old"` archive (~2,600 rows) and
+the other two fixed sheets are never parsed at all, since nothing in the UI
+shows them anymore. A sheet that has neither a header nor a wide-enough
+first row throws `NO_SHEETS`; there is no multi-sheet fallback to try
+because there is no second sheet in play.
 
 ### 4.2 The P/N ↔ Qty. line-pairing rule
 
@@ -373,39 +374,74 @@ resets the visible count back to 150.
 
 Default sort is by ship date, ascending, nulls last — there's no
 column-header sort UI (that concept doesn't really apply to a card layout).
-This is a intentionally minimal choice for v1; a "sort by" control would be
-a reasonable follow-up if it turns out to matter in practice.
 
-### 5.2 Filters, ranked panels, timeline
+### 5.2 August 2026 redesign: no filters, no sheet tabs, a pie instead of ranked panels
 
-All three reuse the *exact same CSS classes* as Project Report
-(`.filters`/`.cb`/`.pop`/`.opt`, `.rt`/`.rrow`/`.rth`, `.tl-scroll`/`.tl-band`)
-— since that CSS is class-based, not id-based, none of it needed to be
-duplicated; only the JS wiring (new element ids, `ep`-prefixed) is new.
+The user asked for a full visual redo of this page, on the premise that only
+one worksheet in the workbook is ever actually looked at (the current-month
+sheet — "Done" / "OPEN ISSUE WITH R&D" / "Old" are noise for this view) and
+that this sheet doesn't need the filter UI Project Report has. Concretely,
+compared to the original v1 design described above (still accurate for
+Project Report, and for §5.1's card layout here):
 
-- **Filters**: Project #, Customer/Project name, P/N, Tech, Priority, Type,
-  Ship date. P/N and Tech are the two *multi-valued* facets (a record can
-  match a filter through any one of its items/tech lines) — `facetValues()`
-  returns an array per record per column, and both the cross-filter facet
-  counting and the match test (`recordMatches`) iterate over that array,
-  generalizing the single-value logic Project Report uses.
-- **Ranked panels**: "Top projects by value" (group by `projectNo`, sum
-  `value`) and "Top P/N by quantity" (flatten every record's `items`, group
-  by `pn`, sum `qty`) — value isn't itemized per P/N in the source data (see
-  §4.2), so ranking P/N by value wouldn't be meaningful; quantity is.
-- **Timeline**: identical bucketing logic to Project Report (month → quarter
-  → year based on how many distinct months are present), duplicated rather
-  than shared for the same reason as the format helpers in §4.
+- **The sheet-switcher segmented control (`epSheetToggle`) is gone**, along
+  with the multi-sheet parsing that fed it — see §4.1's "Only the current
+  sheet is parsed". The header now holds just the brand/switch-page row and,
+  right-aligned, "Load another file" + the loaded filename/sheet/row-count
+  (`epFilemeta`).
+- **The filter bar (`epFiltersSection`, `.cb`/`.pop`/`.opt` combobox fields,
+  chips, mobile filter drawer) is gone entirely** — `FILTER_COLS`,
+  `facetValues`, `recordMatches`, `state.filters`, `state.period` and
+  everything that fed them were deleted. `state.filtered` is now just
+  `activeSheet().rows`, sorted by ship date — there is no filtering step.
+- **The KPI band (`#epKpis`) is `position:sticky`**, pinned directly under
+  the sticky header (`top:var(--epHeaderH)`) so it's always visible while
+  scrolling the list below — this is the "parameters row" the request asked
+  to keep, just anchored. The quality bar (rows without a date/P·N, credit
+  rows, mismatched pairings) that used to sit under it was removed along
+  with everything else below the KPI rule, per the request.
+- **The timeline chart and the two ranked panels (`renderTimeline`,
+  `renderByProject`/`renderByPN` in the original design) are replaced by a
+  pie/donut breakdown** (`renderPie`, `#epPieChart`) with a **P/N ↔ Project**
+  toggle (`#epPieToggle`) above it, sized by summed quantity — `groupByPN`
+  and `groupByProject` are reused from the old ranked-panel code (their sort
+  order changed from by-value to by-qty, since qty is now the only thing
+  either mode encodes). The pie shows the top 7 groups as fixed, ordered
+  categorical hues (`--series-1`..`--series-7` in `:root` — see
+  `dataviz` skill's color-formula for why the order is fixed and not
+  generated) plus an eighth "N more" slice in neutral `--slate` for the
+  remainder — an all-pairs adjacency read (any two pie slices can be
+  neighbours) doesn't cleanly clear CVD separation past 3 hues, so the cap
+  at 7 + Other, with direct-label relief (the legend's text labels + the
+  item list beside it), is the documented trade-off for going past that.
+  `annularPath`/`polar` are small hand-rolled SVG donut-arc helpers, in the
+  same "no charting library, hand-rolled SVG" style as Project Report's own
+  timeline (which this replaces).
+- **Beside the pie, at the same height** (`.eppie-grid`, `--eppie-h`), a
+  plain scrollable list (`renderPieList` → `flattenItems`) shows every
+  line item — one row per P/N (or one row for a record with none) — as
+  **Project / P/N / Qty / Value in US$**, always reflecting the whole
+  sheet regardless of which pie mode is active (this list doesn't change
+  when you toggle P/N ↔ Project; only the pie + its legend do).
+- The full card list (§5.1) is unchanged and still sits below a rule, at
+  the bottom of the page, exactly as before — only what used to be *above*
+  it (filters, timeline, ranked panels) changed.
+- Card click-to-filter (`setOnly("projectNo", …)` on card click) was removed
+  along with the filter system it depended on; cards are no longer
+  clickable, just `role="article"`.
 
-### 5.3 KPI band & quality bar
-
-Five cards: Total value, Total quantity (summed across all items, not
-records), Projects (distinct `projectNo`), Distinct P/N, Rows shown. The
-quality bar below reports, for the *active sheet* (unfiltered): rows without
-a ship date, rows without a P/N, credit (negative-value) rows, values that
-failed to parse, and — the new one — rows where the P/N/Qty line pairing
-was best-effort. This mirrors Project Report's "don't hide data problems,
-surface them" convention.
+One CSS gotcha hit while building this: the pie's P/N/Project toggle reuses
+the site's `.segmented` pill-button styling for visual consistency with the
+header's old sheet-toggle. But `.segmented{order:3}` inside the shared
+`@media (max-width:640px)` block (written for reordering the *header's*
+segmented control among flex-wrapped siblings) also matched this new
+`.segmented`, and — since `.eppie-chart-col` is itself a `flex-direction:
+column` box — silently reordered the toggle to *after* the chart on phones.
+Fixed with a same-specificity `.eppie-toggle{order:0}` declared later in the
+stylesheet, which wins the cascade tie unconditionally rather than only
+inside that one media query. Worth remembering if another `.segmented`
+instance gets added somewhere flex-column'd: that mobile `order:3` rule is
+easy to forget is there.
 
 ## 6. Remembering the last file (Export Plan)
 
@@ -472,6 +508,27 @@ workbooks. Covered:
   expected toast, without disturbing Project Report's own (empty, in that
   test) cached state.
 
+**August 2026 redesign (§5.2) re-verification**: the two original sample
+workbooks aren't in the repo (see §2) and weren't re-attached for this pass,
+so a synthetic `.xlsx` was built (openpyxl) with a "JUNE 26" sheet — a
+row-24-style multi-P/N record, a single-P/N record, a negative-value
+(credit) record, a record with a blank ship date, and one legend-shaped row
+(`Project #` blank) to re-confirm §4.3's skip still holds — plus `Done` /
+`OPEN ISSUE WITH R&D` / `Old` sheets left in the workbook specifically to
+confirm they're never parsed. Verified with Playwright against
+`file://index.html`, desktop (1440×900) and iPhone-sized (390×844):
+sheet-toggle and filter DOM (`#epSheetToggle`, `#epFiltersSection`,
+`#epQuality`, `#page-export .charts`) are gone; `#epKpis` is
+`position:sticky` and its top edge tracks the header's bottom edge while
+scrolled; the pie/list pair renders and reacts to the P/N ↔ Project toggle
+with the expected grouped quantities; the item list stays constant across
+that toggle; the card list below is unaffected; zero console/page errors on
+either viewport. Also re-ran Project Report's own drop screen afterward to
+confirm it still loads with zero console errors — this redesign didn't
+touch that module, but the shared CSS (`:root` categorical palette vars,
+the `.segmented{order:3}` interaction from §5.2) is a plausible place for a
+regression to sneak in, so it was worth the extra check.
+
 ## 8. Known limitations / deliberately deferred
 
 - No "suspect year" quality flag for Export Plan dates (Project Report has
@@ -491,3 +548,11 @@ workbooks. Covered:
   first.
 - No folder auto-connect for Export Plan (see §6) — by-hand file picking
   and the cached-file restore only.
+- The item list beside the pie (§5.2) is rendered in one shot, with no
+  "Show more" pagination like the card list has — reasonable given only the
+  current sheet is ever parsed now (tens to low hundreds of rows, not the
+  ~2,600-row "Old" archive), but worth revisiting if a future current-month
+  sheet turns out to be unusually large.
+- The pie caps at 7 explicit slices + one "N more" slice; there's no way to
+  expand "N more" to see what's folded into it beyond scrolling the item
+  list beside it, which isn't filtered to match.
