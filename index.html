@@ -478,15 +478,20 @@
   /* ============================================================
      Export Plan — pie breakdown + matching-height line-item list
      ------------------------------------------------------------
-     Two columns, equal height: a narrow, fixed-width Project/P·N/
-     Qty/Value list on the left (in the sheet's own row order —
-     see renderPieList) and a large P/N-or-Project quantity pie on
-     the right (flexible width, the list gives it the room) with a
-     toggle above it. Every slice is direct-labelled with a leader
-     line — no "N more" bucket, every distinct project/P·N gets its
-     own slice and its own color (cycling the 7-slot palette past
-     7 groups). Hover *previews* a slice (grows it, shows its qty/
-     share/value) without touching the list; a click *picks* it,
+     Two panes, equal height, flexbox (not CSS grid) so the split
+     between them is user-resizable: a Project/P·N/Qty/Value list
+     (in the sheet's own row order — see renderPieList), a drag
+     handle, then a P/N-or-Project quantity pie with a toggle above
+     it. Default split is ~60/40 list/chart, dragged via
+     `.eppie-resizer` (wireEppieResizer) which pins the list pane
+     to a px width; the chart pane just takes what's left.
+     Slice labels are NOT shown by default — only the slice being
+     hovered or picked shows its leader line + name, so the donut
+     reads clean at rest (every `.epslice-label` starts
+     `opacity:0`, toggled by the same hover/pick handlers that
+     already drive the grow/pick effects — see pieSetLabelVisible).
+     Hover *previews* a slice (grows it, shows its qty/share/value
+     and its label) without touching the list; a click *picks* it,
      driving the list highlight — and the reverse also works:
      clicking a list row/group picks the matching slice on the pie.
      Consecutive same-project rows are visibly framed as one group
@@ -499,12 +504,12 @@
      ============================================================ */
   .eppie-wrap{margin-top:22px}
   .eppie-grid{
-    --eppie-h:620px;
-    display:grid; grid-template-columns:300px 1fr; align-items:stretch;
+    --eppie-h:400px;
+    display:flex; align-items:stretch;
   }
   .eppie-list-col{
     display:flex; flex-direction:column; height:var(--eppie-h);
-    border-right:1px solid var(--line);
+    flex:0 0 auto; width:60%; min-width:220px; max-width:78%;
   }
   .epsl-head{
     display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:8px;
@@ -538,29 +543,44 @@
   .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
   .epsl-proj,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
   .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
+  .eppie-resizer{
+    flex:0 0 13px; position:relative; cursor:col-resize; height:var(--eppie-h);
+  }
+  .eppie-resizer::after{
+    content:""; position:absolute; top:6px; bottom:6px; left:50%;
+    width:1px; background:var(--line-strong); transform:translateX(-50%);
+    transition:background .12s, width .12s;
+  }
+  .eppie-resizer:hover::after, .eppie-resizer.dragging::after{
+    background:var(--gold); width:3px; border-radius:2px;
+  }
   .eppie-chart-col{
     display:flex; flex-direction:column; height:var(--eppie-h);
+    flex:1 1 auto; min-width:180px;
     padding:14px 20px 10px;
   }
   .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0}
   .eppie-chartscroll{flex:1; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
   .eppie-chart{width:100%; display:flex; justify-content:center}
-  .eppie-chart svg{display:block; width:100%; max-width:950px; height:auto}
+  .eppie-chart svg{display:block; width:100%; max-width:420px; height:auto}
   .eppie-chart path{cursor:pointer; outline:none}
   .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
+  .epslice-label{opacity:0; transition:opacity .1s}
+  .epslice-label.show{opacity:1}
   .epslice-label text{user-select:none}
   .epslice-label polyline{opacity:.7}
 
   @media (max-width:1180px){
-    .eppie-grid{--eppie-h:520px}
+    .eppie-grid{--eppie-h:360px}
   }
   @media (max-width:900px){
-    .eppie-grid{grid-template-columns:1fr; --eppie-h:480px}
-    .eppie-list-col{border-right:0; border-bottom:1px solid var(--line)}
-    .eppie-chart svg{max-width:700px}
+    .eppie-grid{flex-direction:column; --eppie-h:340px}
+    .eppie-list-col{flex-basis:auto !important; width:auto !important; max-width:none; border-right:0; border-bottom:1px solid var(--line)}
+    .eppie-resizer{display:none}
+    .eppie-chart svg{max-width:340px}
   }
   @media (max-width:640px){
-    .eppie-grid{--eppie-h:320px}
+    .eppie-grid{--eppie-h:300px}
     .epsl-head{padding-left:12px; padding-right:12px}
     .eppie-listscroll{padding:0 12px}
     .eppie-chart-col{padding:12px 12px 8px}
@@ -780,6 +800,7 @@
           </div>
           <div class="eppie-listscroll" id="epPieList"></div>
         </div>
+        <div class="eppie-resizer" id="epPieResizer" role="separator" aria-orientation="vertical" aria-label="Resize list/chart split" tabindex="0"></div>
         <div class="eppie-chart-col">
           <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
             <button type="button" data-mode="pn" aria-pressed="true">P/N</button>
@@ -2735,6 +2756,13 @@ function pieSetGrown(idx, grown){
   var sl = pieState.slices[idx], g = pieState.geom;
   path.setAttribute("d", annularPath(g.cx, g.cy, g.rOuter + (grown ? PIE_HOVER_GROW : 0), g.rInner, sl._a0, sl._a1));
 }
+// Slice labels are hidden by default (see .epslice-label{opacity:0} —
+// the request was a clean donut at rest, name shown only for whichever
+// slice is currently hovered or picked).
+function pieSetLabelVisible(idx, visible){
+  var label = pieState.svg && pieState.svg.querySelector('.epslice-label[data-idx="'+idx+'"]');
+  if (label) label.classList.toggle("show", visible);
+}
 // The single "pick" implementation — reached from a pie slice click AND
 // from a list row/group click (see wireListInteractions), so both
 // directions of the pie↔list link stay in sync through one code path.
@@ -2744,16 +2772,19 @@ function pieTogglePick(idx){
     var path = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
     if (path) path.classList.remove("picked");
     pieState.pickedIdx = null;
+    pieSetLabelVisible(idx, false);
     pieShowTotal();
     highlightPieListSlice(pieState.mode, null);
   } else {
     if (pieState.pickedIdx !== null){
       var prevPath = pieState.svg.querySelector('path[data-idx="'+pieState.pickedIdx+'"]');
       if (prevPath) prevPath.classList.remove("picked");
+      pieSetLabelVisible(pieState.pickedIdx, false);
     }
     pieState.pickedIdx = idx;
     var newPath = pieState.svg.querySelector('path[data-idx="'+idx+'"]');
     if (newPath) newPath.classList.add("picked");
+    pieSetLabelVisible(idx, true);
     pieShowSlice(pieState.slices[idx]);
     highlightPieListSlice(pieState.mode, pieState.slices[idx]);
   }
@@ -2786,7 +2817,7 @@ function renderPieChart(slices, total, mode){
     );
     var am = (a0 + a1) / 2, dir = Math.cos(am) >= 0 ? 1 : -1;
     var p1 = polar(cx, cy, rOuter, am), p2 = polar(cx, cy, rOuter + 10, am);
-    labelItems.push({ key:sl.key, dir:dir, p1:p1, p2:p2, y:p2[1] });
+    labelItems.push({ idx:idx, key:sl.key, dir:dir, p1:p1, p2:p2, y:p2[1] });
     a0 = a1;
   });
   // Many small adjacent slices can put their labels within a few px of
@@ -2802,7 +2833,7 @@ function renderPieChart(slices, total, mode){
   });
   var labels = labelItems.map(function(it){
     var stubX = it.p2[0] + it.dir * 14;
-    return '<g class="epslice-label">' +
+    return '<g class="epslice-label" data-idx="'+it.idx+'">' +
         '<polyline points="'+it.p1[0]+','+it.p1[1]+' '+it.p2[0]+','+it.p2[1]+' '+it.p2[0]+','+it.y+' '+stubX+','+it.y+'" fill="none" stroke="var(--line-strong)" stroke-width="1"/>' +
         '<text x="'+(stubX + it.dir*4)+'" y="'+(it.y+3.5)+'" text-anchor="'+(it.dir>0?"start":"end")+'" font-size="10.5" fill="var(--ink-2)">'+esc(truncateLabel(it.key, 13))+'</text>' +
       '</g>';
@@ -2821,8 +2852,16 @@ function renderPieChart(slices, total, mode){
   pieState.centerLab = svg.querySelector("#epPieCenterLab");
   svg.querySelectorAll("path[data-idx]").forEach(function(path){
     var idx = +path.dataset.idx;
-    function preview(){ pieSetGrown(idx, true); if (pieState.pickedIdx === null) pieShowSlice(pieState.slices[idx]); }
-    function unpreview(){ pieSetGrown(idx, false); if (pieState.pickedIdx === null) pieShowTotal(); else pieShowSlice(pieState.slices[pieState.pickedIdx]); }
+    function preview(){
+      pieSetGrown(idx, true);
+      pieSetLabelVisible(idx, true);
+      if (pieState.pickedIdx === null) pieShowSlice(pieState.slices[idx]);
+    }
+    function unpreview(){
+      pieSetGrown(idx, false);
+      if (idx !== pieState.pickedIdx) pieSetLabelVisible(idx, false);
+      if (pieState.pickedIdx === null) pieShowTotal(); else pieShowSlice(pieState.slices[pieState.pickedIdx]);
+    }
     path.addEventListener("mouseenter", preview);
     path.addEventListener("mouseleave", unpreview);
     path.addEventListener("focus", preview);
@@ -2929,6 +2968,56 @@ function wirePieToggle(){
   });
 }
 wirePieToggle();
+
+// Drag the divider between the item list and the pie to resize their
+// split — the list pane gets a pinned px width (min 220px, max 78% of
+// the row so the chart pane always keeps some room); the chart pane is
+// flex:1 and just takes what's left. Disabled below the 900px breakpoint,
+// where the two panes stack instead of sitting side by side (see CSS).
+function wireEppieResizer(){
+  var resizer = document.getElementById("epPieResizer");
+  var grid = resizer && resizer.closest(".eppie-grid");
+  var listCol = grid && grid.querySelector(".eppie-list-col");
+  if (!resizer || !grid || !listCol) return;
+  var dragging = false, startX = 0, startW = 0;
+  function clampWidth(px){
+    var rowW = grid.getBoundingClientRect().width;
+    var min = 220, max = Math.max(min, rowW * 0.78);
+    return Math.max(min, Math.min(max, px));
+  }
+  function onMove(e){
+    if (!dragging) return;
+    var x = e.touches ? e.touches[0].clientX : e.clientX;
+    listCol.style.width = clampWidth(startW + (x - startX)) + "px";
+  }
+  function stop(){
+    dragging = false;
+    resizer.classList.remove("dragging");
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", stop);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", stop);
+  }
+  function start(e){
+    dragging = true;
+    startX = e.touches ? e.touches[0].clientX : e.clientX;
+    startW = listCol.getBoundingClientRect().width;
+    resizer.classList.add("dragging");
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", stop);
+    document.addEventListener("touchmove", onMove, { passive:false });
+    document.addEventListener("touchend", stop);
+    e.preventDefault();
+  }
+  resizer.addEventListener("mousedown", start);
+  resizer.addEventListener("touchstart", start, { passive:false });
+  resizer.addEventListener("keydown", function(e){
+    var step = 28, w = listCol.getBoundingClientRect().width;
+    if (e.key === "ArrowLeft"){ listCol.style.width = clampWidth(w - step) + "px"; e.preventDefault(); }
+    else if (e.key === "ArrowRight"){ listCol.style.width = clampWidth(w + step) + "px"; e.preventDefault(); }
+  });
+}
+wireEppieResizer();
 
 /* ============================================================
    7. Filter bar for the bottom (full) table only

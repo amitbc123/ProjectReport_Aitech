@@ -674,6 +674,60 @@ A third round of feedback the same day, on the pie + list from §5.2/§5.3:
   Value cell = 10), so the real gap was the missing money figure, now
   `pct% · $total` on the label's second line.
 
+### 5.6 Fifth round: the pie had gotten too big — walked back to ~40%, on-demand labels, a draggable split
+
+Round four over-corrected — the user came back saying the pie was now
+"huge," eating ~80% of the screen, and asked for roughly a 40/60 chart/list
+split instead, no always-on labels, and a way to *adjust* that split
+themselves rather than have it hardcoded either way:
+
+- **`.eppie-grid` changed from CSS grid to flexbox**, specifically so the
+  split can be dragged. `.eppie-list-col` is `flex:0 0 auto; width:60%`
+  (not `flex:0 0 60%` — the `flex` shorthand sets `flex-basis`, and
+  `flex-basis` wins over `width` on the main axis whenever it isn't
+  `auto`, which would have silently ignored any `width` the drag handler
+  set later; `flex-basis:auto` is what makes `width` the effective sizing
+  property) and `.eppie-chart-col` is `flex:1 1 auto` — it simply gets
+  whatever's left, so the two always sum to the full row width by
+  construction.
+- **The pie itself shrank** — not by changing the SVG's internal geometry
+  (`cx/cy/rOuter/rInner` and the tightened 500×290 viewBox from §5.5 are
+  untouched) but by pulling the CSS clamp way back down,
+  `.eppie-chart svg{max-width:420px}` (from 950px). Combined with the list
+  column now defaulting to 60% instead of a fixed 300px, the rendered
+  chart column is close to the requested ~40% share on typical widths.
+- **A drag handle between the two panes** (`#epPieResizer`, a 13px
+  `cursor:col-resize` strip with a thin centered line) lets the user move
+  that split themselves — `wireEppieResizer()` tracks `mousedown`/
+  `mousemove`/`mouseup` (and the touch equivalents) on it, computes the
+  list pane's new width from the drag delta, and clamps it between 220px
+  and 78% of the row so neither pane can be squeezed to nothing. Left/
+  Right arrow keys nudge it by 28px when the handle has focus
+  (`role="separator" tabindex="0"`) for keyboard users. Hidden below the
+  900px breakpoint (`.eppie-resizer{display:none}`), where the panes
+  stack vertically instead of sitting side by side — dragging a
+  horizontal split doesn't mean anything once they're stacked, and the
+  list pane's width is force-reset there (`width:auto !important` — a
+  deliberate, narrow use of `!important`, needed because the drag handler
+  may have left a JS-set inline `width` from a wider viewport, which
+  otherwise beats any non-`!important` stylesheet rule regardless of
+  selector specificity).
+- **Slice labels no longer show at rest.** Every `.epslice-label` starts
+  `opacity:0` (`transition:opacity .1s`); a `.show` class — toggled by
+  `pieSetLabelVisible(idx, visible)` — is the only thing that reveals one.
+  That function is called from the exact same places that already existed
+  for the grow/pick effects (§5.4/§5.5), so no new interaction model was
+  needed: hovering/focusing a slice shows its label (`preview()`) and
+  hides it again on leave *unless* that slice is the picked one
+  (`unpreview()` checks `idx !== pieState.pickedIdx` before hiding);
+  picking a slice shows its label and keeps it shown until it's un-picked
+  or another slice is picked (`pieTogglePick`, which now also calls
+  `pieSetLabelVisible` on both the outgoing and incoming index). Net
+  effect: at most two labels are ever visible at once — the picked one (if
+  any) and whatever's currently under the pointer — so the donut reads
+  clean by default and the earlier decluttering pass (§5.5) rarely even
+  gets exercised now that labels aren't all on-screen simultaneously.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
