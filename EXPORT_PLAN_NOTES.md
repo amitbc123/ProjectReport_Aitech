@@ -420,12 +420,14 @@ Project Report, and for §5.1's card layout here):
 - **Beside the pie, at the same height** (`.eppie-grid`, `--eppie-h`), a
   plain scrollable list (`renderPieList` → `flattenItems`) shows every
   line item — one row per P/N (or one row for a record with none) — as
-  **Project / P/N / Qty / Value in US$**, always reflecting the whole
-  sheet regardless of which pie mode is active (this list doesn't change
-  when you toggle P/N ↔ Project; only the pie + its legend do).
+  **Project / P/N / Qty / Value in US$**, in the sheet's own row order
+  (see §5.3), always reflecting the whole sheet regardless of which pie
+  mode is active (this list doesn't change when you toggle P/N ↔ Project;
+  only the pie does).
 - The full card list (§5.1) is unchanged and still sits below a rule, at
   the bottom of the page, exactly as before — only what used to be *above*
-  it (filters, timeline, ranked panels) changed.
+  it (the original filters, timeline, ranked panels) changed. (A different
+  filter bar came back above it in the §5.3 follow-up — read on.)
 - Card click-to-filter (`setOnly("projectNo", …)` on card click) was removed
   along with the filter system it depended on; cards are no longer
   clickable, just `role="article"`.
@@ -442,6 +444,70 @@ stylesheet, which wins the cascade tie unconditionally rather than only
 inside that one media query. Worth remembering if another `.segmented`
 instance gets added somewhere flex-column'd: that mobile `order:3` rule is
 easy to forget is there.
+
+### 5.3 Same-day follow-up: no legend, hover-linked list, bigger pie, filters are back (for the table only)
+
+A second round of feedback on §5.2, addressed the same day:
+
+- **The separate pie legend (`renderPieLegend`, `#epPieLegend`, `.epleg-*`)
+  is gone** — the request was explicit that the item list *is* the legend,
+  so a second list-shaped thing under the donut was redundant. The pie's
+  `<title>` per `<path>` still carries the full label for anyone who wants
+  it (screen readers, a slow native tooltip), but the primary way to read a
+  slice is now interaction, not a static key.
+- **Hover (or keyboard focus) on a slice now does two things**
+  (`renderPieChart` → `wirePieHover`): the donut's center label swaps from
+  the sheet total to that slice's own qty + share (two `<text>` nodes,
+  `#epPieCenterVal`/`#epPieCenterLab`, textContent-swapped, not
+  re-rendered), and every matching row in `#epPieList` gets a `.hl`
+  highlight (`data-project`/`data-pn` attributes written per row in
+  `renderPieList`, matched against the slice's `key` — or, for the "N
+  more" slice, against its `otherKeys` array, so hovering "Other" lights
+  up every folded-in row at once). The first matched row also gets
+  `scrollIntoView({block:"nearest", behavior:"smooth"})`, since the row
+  proving the highlight actually works is often scrolled out of view in a
+  ~380px-tall list. `mouseenter`/`mouseleave` and `focus`/`blur` share the
+  same two handlers, so tabbing through the slices (each has
+  `tabindex="0"`) gets the identical effect for keyboard users.
+- **The pie is bigger**: 268px/rOuter 126/rInner 60, up from 232/108/54 —
+  there was headroom to spend once the legend (which used to compete for
+  the same column height) was removed. `--eppie-h` (the shared column
+  height both sides match) actually came *down*, from 440px to 380px
+  desktop, since a lone toggle + donut needs less vertical room than
+  toggle + donut + a potentially-long legend did.
+- **The item list is now in the sheet's own row order**, not the
+  ship-date-ascending order used elsewhere. `renderPie()` reads straight
+  from `activeSheet().rows` (the parser's natural, unsorted order — see
+  §4's "Only the current sheet is parsed") instead of `state.filtered`;
+  `state.filtered` is now exclusively the bottom table's business (next
+  bullet). Sort order for the pie's own aggregation doesn't matter (it's
+  summed into groups either way), only the list's display order does.
+- **A filter bar is back — scoped to the bottom (full) table only.** This
+  is close to a straight revival of §5.2's deleted `renderFilterBar`/
+  `wireCombo`/`FILTER_COLS`/`facetValues`/`recordMatches` (same 7 columns,
+  same combobox component), renamed with an `epCard`-prefix
+  (`renderCardFilterBar`, `wireCardCombo`, `toggleFilter`,
+  `renderCardChips`, `#epCardFiltersSection`) and moved to sit directly
+  above `.tablewrap` instead of at the top of the page. Crucially,
+  `state.filters`/`state.filtered` now mean "the bottom table's filters" —
+  the KPI band reads `state.filtered` too (so "X of Y" is meaningful again
+  when a filter is active), but the pie and its item list deliberately do
+  **not** — they read `activeSheet().rows` directly (previous bullet), so
+  filtering the table never changes what the pie shows. This was a
+  conscious split, not an oversight: the request asked for filters on "the
+  bottom table", not the summary section above it.
+- **CSS gotcha #2**: `.filters` (shared with Project Report and with the
+  original §5.2 filters this reuses) has a `@media (max-width:640px)` rule
+  that makes it `position:sticky; top:var(--headerH/--epHeaderH)` — correct
+  when `.filters` is the page's first content row, wrong here since this
+  instance sits mid-page. Fixed with an ID-scoped override,
+  `#epCardFiltersSection{position:relative; top:auto; margin-top:16px}`
+  inside the same media query (ID beats class, and it's declared after the
+  generic rule, so it wins outright rather than needing `!important`). It
+  still needs `position:relative` (not `static`) on mobile, though, because
+  `.fpanel`'s mobile dropdown is `position:absolute` and anchors to the
+  nearest positioned ancestor — dropping position entirely would let the
+  dropdown escape to whatever ancestor *is* positioned and mis-place it.
 
 ## 6. Remembering the last file (Export Plan)
 

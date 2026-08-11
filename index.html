@@ -479,13 +479,16 @@
      Export Plan — pie breakdown + matching-height line-item list
      ------------------------------------------------------------
      Two columns, equal height: a scrollable Project/P·N/Qty/Value
-     list on the left, a P/N-or-Project quantity pie on the right
-     with a toggle above it. Both columns share --eppie-h so the
-     list is exactly "as tall as the pie itself".
+     list on the left (in the sheet's own row order — see
+     renderPieList), a P/N-or-Project quantity pie on the right
+     with a toggle above it. No separate legend: hovering (or
+     focusing) a slice swaps the donut's center label to that
+     slice's qty/share and highlights the matching row(s) in the
+     list instead — the list itself is the "legend".
      ============================================================ */
   .eppie-wrap{margin-top:22px}
   .eppie-grid{
-    --eppie-h:440px;
+    --eppie-h:380px;
     display:grid; grid-template-columns:1fr 380px; align-items:stretch;
   }
   .eppie-list-col{
@@ -502,8 +505,10 @@
   .epsl-row{
     display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:8px; align-items:center;
     padding:7px 16px; font-size:12.5px; border-bottom:1px solid #F4F5F7;
+    transition:background .12s;
   }
   .epsl-row:hover{background:#F8F9FA}
+  .epsl-row.hl{background:var(--gold-tint)}
   .epsl-proj,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
   .epsl-qty{text-align:right; font-variant-numeric:tabular-nums; color:var(--ink)}
   .epsl-val{text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
@@ -513,26 +518,38 @@
     padding:14px 16px 10px;
   }
   .eppie-toggle{align-self:flex-start; margin-bottom:12px; order:0}
-  .eppie-chartscroll{flex:1; min-height:0; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:thin}
-  .eppie-chart{flex:0 0 auto; display:flex; justify-content:center; padding:4px 0 10px}
+  .eppie-chartscroll{flex:1; min-height:0; display:flex; justify-content:center; align-items:center}
   .eppie-chart svg{display:block}
-  .eppie-legend{display:flex; flex-direction:column; gap:2px}
-  .epleg-row{display:flex; align-items:center; gap:8px; padding:5px 4px; border-radius:5px; font-size:12.5px}
-  .epleg-row:hover{background:#F8F9FA}
-  .epleg-row i{width:9px; height:9px; border-radius:2px; flex:0 0 9px}
-  .epleg-lab{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
-  .epleg-qty{font-variant-numeric:tabular-nums; color:var(--ink); font-weight:500}
-  .epleg-pct{font-variant-numeric:tabular-nums; color:var(--faint); font-size:11px; width:42px; text-align:right}
+  .eppie-chart path{cursor:pointer; transition:filter .1s, stroke-width .1s}
+  .eppie-chart path.hover{filter:brightness(1.08); stroke-width:3px}
+  .eppie-chart path:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
 
   @media (max-width:900px){
-    .eppie-grid{grid-template-columns:1fr; --eppie-h:340px}
+    .eppie-grid{grid-template-columns:1fr; --eppie-h:320px}
     .eppie-list-col{border-right:0; border-bottom:1px solid var(--line)}
   }
   @media (max-width:640px){
-    .eppie-grid{--eppie-h:340px}
+    .eppie-grid{--eppie-h:300px}
     .epsl-head,.epsl-row{padding-left:12px; padding-right:12px}
     .eppie-chart-col{padding:12px 12px 8px}
-    .eppie-chart svg{width:180px; height:180px}
+    .eppie-chart svg{width:210px; height:210px}
+  }
+
+  /* ============================================================
+     Export Plan — filter bar for the bottom (full) table only
+     ------------------------------------------------------------
+     Reuses Project Report's .filters/.cb/.pop/.opt/.chips
+     components verbatim, but this instance sits mid-page (above
+     the card list) rather than at the top, so it must opt out of
+     the shared mobile rule that makes any .filters sticky under
+     the header (that rule assumes it's the page's first section).
+     ============================================================ */
+  #epCardFiltersSection{margin-top:22px}
+  @media (max-width:640px){
+    #epCardFiltersSection{
+      position:relative; top:auto; margin-top:16px;
+      border-top:1px solid var(--line); border-radius:10px;
+    }
   }
 </style>
 </head>
@@ -739,13 +756,28 @@
           </div>
           <div class="eppie-chartscroll">
             <div class="eppie-chart" id="epPieChart"></div>
-            <div class="eppie-legend" id="epPieLegend"></div>
           </div>
         </div>
       </div>
     </section>
 
     <div class="rule"></div>
+
+    <section class="filters" id="epCardFiltersSection">
+      <div class="head">
+        <div class="eyebrow">Filter this table</div>
+        <button class="btn ghost" id="epCardClearAll">Clear all</button>
+      </div>
+      <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
+        <span class="mfLabel">Filters</span>
+        <span class="badge" id="epCardMfCount" hidden>0</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
+      <div class="fpanel" id="epCardFpanel">
+        <div class="fgrid" id="epCardFgrid"></div>
+        <div class="chips" id="epCardChips"></div>
+      </div>
+    </section>
 
     <section class="panel tablewrap">
       <div class="tbar">
@@ -2466,21 +2498,73 @@ function parseExportWorkbook(u8){
 
 /* ============================================================
    4. State
+   ------------------------------------------------------------
+   state.filters/state.filtered drive the bottom (full) table
+   only — the KPI band reports filtered-vs-total from the same
+   two, but the pie + item list above always read straight from
+   activeSheet().rows (see §6), independent of these filters.
    ============================================================ */
 var state = {
   fileName:"", sheet:null, pieMode:"pn",
-  filtered:[], totals:null, visibleCount:PAGE_SIZE
+  filters:{}, filtered:[], facets:{}, totals:null, visibleCount:PAGE_SIZE
 };
 function activeSheet(){ return state.sheet; }
 
+var FILTER_COLS = [
+  { key:"projectNo",   label:"Project #" },
+  { key:"projectName", label:"Customer / project" },
+  { key:"pn",           label:"P/N" },
+  { key:"tech",         label:"Tech" },
+  { key:"priority",     label:"Priority" },
+  { key:"type",         label:"Type" },
+  { key:"shipDate",     label:"Ship date" }
+];
+function facetValues(rec, key){
+  if (key === "pn") return rec.items.length ? rec.items.map(function(it){ return it.pn; }) : [BLANK];
+  if (key === "tech") return rec.techLines.length ? rec.techLines : [BLANK];
+  if (key === "shipDate") return [rec.shipDate === null ? BLANK : fmtDate(rec.shipDate)];
+  var v = rec[key];
+  return [v ? v : BLANK];
+}
+function recordMatches(rec, key, selected){
+  var vals = facetValues(rec, key);
+  for (var i = 0; i < vals.length; i++) if (selected.has(vals[i])) return true;
+  return false;
+}
+function anyFilter(){
+  for (var k in state.filters) if (state.filters[k] && state.filters[k].size) return true;
+  return false;
+}
 function recompute(){
-  var out = activeSheet().rows.slice();
+  var recs = activeSheet().rows;
+  var active = FILTER_COLS.filter(function(c){ return state.filters[c.key] && state.filters[c.key].size; });
+  var facets = {}; FILTER_COLS.forEach(function(c){ facets[c.key] = new Map(); });
+  var out = [];
+  for (var i = 0; i < recs.length; i++){
+    var rec = recs[i];
+    var fails = 0, failKey = null;
+    for (var a = 0; a < active.length; a++){
+      if (!recordMatches(rec, active[a].key, state.filters[active[a].key])){
+        fails++; failKey = active[a].key;
+        if (fails > 1) break;
+      }
+    }
+    if (fails === 0) out.push(rec);
+    if (fails <= 1){
+      for (var c = 0; c < FILTER_COLS.length; c++){
+        var key = FILTER_COLS[c].key;
+        if (fails === 1 && key !== failKey) continue;
+        facetValues(rec, key).forEach(function(v){ facets[key].set(v, (facets[key].get(v) || 0) + 1); });
+      }
+    }
+  }
   out.sort(function(a, b){
     if (a.shipDate === null && b.shipDate === null) return 0;
     if (a.shipDate === null) return 1;
     if (b.shipDate === null) return -1;
     return a.shipDate - b.shipDate;
   });
+  state.facets = facets;
   state.filtered = out;
 }
 
@@ -2515,8 +2599,12 @@ function renderKpis(){
    6. Pie breakdown (P/N or Project, by quantity) + the matching
       Project / P/N / Qty / Value in US$ list beside it.
    ------------------------------------------------------------
-   No filters exist on this page, so both panels always reflect
-   the whole active sheet (state.filtered, unfiltered).
+   Both panels always reflect the *whole* active sheet, in the
+   sheet's own row order — independent of the bottom table's
+   filters (§8) and of which pie mode is selected. There's no
+   separate legend: hovering/focusing a slice swaps the donut's
+   center label to that slice's qty + share, and highlights the
+   matching row(s) in the list (scrolling the first into view).
    ============================================================ */
 var SERIES_COLORS = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)"];
 var PIE_OTHER_COLOR = "var(--slate)";
@@ -2549,7 +2637,10 @@ function pieSlices(recs, mode){
   var slices = top.map(function(g, i){ return { key:g.k, qty:g.qty, color:SERIES_COLORS[i] }; });
   var restGroups = groups.slice(PIE_TOP_N);
   var restQty = restGroups.reduce(function(s, g){ return s + g.qty; }, 0);
-  if (restGroups.length) slices.push({ key: restGroups.length + " more", qty:restQty, color:PIE_OTHER_COLOR, isOther:true });
+  if (restGroups.length) slices.push({
+    key: restGroups.length + " more", qty:restQty, color:PIE_OTHER_COLOR, isOther:true,
+    otherKeys: restGroups.map(function(g){ return g.k; })
+  });
   return slices;
 }
 function polar(cx, cy, r, ang){ return [cx + r*Math.cos(ang), cy + r*Math.sin(ang)]; }
@@ -2560,40 +2651,56 @@ function annularPath(cx, cy, rOuter, rInner, a0, a1){
   return "M"+p0[0]+","+p0[1]+" A"+rOuter+","+rOuter+" 0 "+large+" 1 "+p1[0]+","+p1[1]+
          " L"+p2[0]+","+p2[1]+" A"+rInner+","+rInner+" 0 "+large+" 0 "+p3[0]+","+p3[1]+" Z";
 }
-function renderPieChart(slices, total){
+function renderPieChart(slices, total, mode){
   var host = document.getElementById("epPieChart");
   if (!total){
     host.innerHTML = '<div class="empty"><b>Nothing to chart</b>No quantities in this sheet.</div>';
     return;
   }
-  var size = 232, cx = size/2, cy = size/2, rOuter = 108, rInner = 54;
+  var size = 268, cx = size/2, cy = size/2, rOuter = 126, rInner = 60;
   var a0 = -Math.PI/2;
   var s = ['<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'" role="img" aria-label="Quantity breakdown">'];
-  slices.forEach(function(sl){
+  slices.forEach(function(sl, idx){
     var frac = Math.max(0, sl.qty) / total;
     if (frac <= 0) return;
     var a1 = a0 + Math.min(frac, 0.9999) * Math.PI * 2;
-    s.push('<path d="'+annularPath(cx, cy, rOuter, rInner, a0, a1)+'" fill="'+sl.color+'" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round">'+
+    s.push('<path data-idx="'+idx+'" tabindex="0" d="'+annularPath(cx, cy, rOuter, rInner, a0, a1)+'" fill="'+sl.color+'" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round">'+
       '<title>'+esc(sl.key)+' · '+nfInt.format(sl.qty)+' ('+(frac*100).toFixed(1)+'%)</title></path>');
     a0 += frac * Math.PI * 2;
   });
-  s.push('<text x="'+cx+'" y="'+(cy-3)+'" text-anchor="middle" font-size="21" font-weight="600" fill="var(--ink)">'+nfInt.format(total)+'</text>');
-  s.push('<text x="'+cx+'" y="'+(cy+15)+'" text-anchor="middle" font-size="10" fill="var(--faint)">total qty</text>');
+  s.push('<text id="epPieCenterVal" x="'+cx+'" y="'+(cy-3)+'" text-anchor="middle" font-size="23" font-weight="600" fill="var(--ink)">'+nfInt.format(total)+'</text>');
+  s.push('<text id="epPieCenterLab" x="'+cx+'" y="'+(cy+16)+'" text-anchor="middle" font-size="10.5" fill="var(--faint)">total qty</text>');
   s.push("</svg>");
   host.innerHTML = s.join("");
+  wirePieHover(host, slices, total, mode);
 }
-function renderPieLegend(slices, total){
-  var host = document.getElementById("epPieLegend");
-  if (!total){ host.innerHTML = ""; return; }
-  host.innerHTML = slices.map(function(sl){
-    var pct = sl.qty / total * 100;
-    return '<div class="epleg-row">'+
-      '<i style="background:'+sl.color+'"></i>'+
-      '<span class="epleg-lab'+(sl.isOther?"":" mono")+'" title="'+esc(sl.key)+'">'+esc(sl.key)+'</span>'+
-      '<span class="epleg-qty">'+nfInt.format(sl.qty)+'</span>'+
-      '<span class="epleg-pct">'+pct.toFixed(1)+'%</span>'+
-    '</div>';
-  }).join("");
+function wirePieHover(host, slices, total, mode){
+  var centerVal = host.querySelector("#epPieCenterVal"), centerLab = host.querySelector("#epPieCenterLab");
+  var attr = mode === "project" ? "project" : "pn";
+  host.querySelectorAll("path[data-idx]").forEach(function(path){
+    var sl = slices[+path.dataset.idx];
+    var matchSet = sl.isOther ? new Set(sl.otherKeys) : new Set([sl.key]);
+    function enter(){
+      path.classList.add("hover");
+      centerVal.textContent = nfInt.format(sl.qty);
+      centerLab.textContent = (sl.qty / total * 100).toFixed(1) + "%";
+      var first = null;
+      document.querySelectorAll("#epPieList .epsl-row").forEach(function(r){
+        if (matchSet.has(r.dataset[attr])){ r.classList.add("hl"); if (!first) first = r; }
+      });
+      if (first) first.scrollIntoView({ block:"nearest", behavior:"smooth" });
+    }
+    function leave(){
+      path.classList.remove("hover");
+      centerVal.textContent = nfInt.format(total);
+      centerLab.textContent = "total qty";
+      document.querySelectorAll("#epPieList .epsl-row.hl").forEach(function(r){ r.classList.remove("hl"); });
+    }
+    path.addEventListener("mouseenter", enter);
+    path.addEventListener("mouseleave", leave);
+    path.addEventListener("focus", enter);
+    path.addEventListener("blur", leave);
+  });
 }
 function flattenItems(recs){
   var out = [];
@@ -2614,7 +2721,7 @@ function renderPieList(recs){
     return;
   }
   host.innerHTML = items.map(function(it){
-    return '<div class="epsl-row">'+
+    return '<div class="epsl-row" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+
       '<span class="epsl-proj mono">'+esc(it.project || "—")+'</span>'+
       '<span class="epsl-pn mono">'+esc(it.pn || "—")+'</span>'+
       '<span class="epsl-qty">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'+
@@ -2623,12 +2730,13 @@ function renderPieList(recs){
   }).join("");
 }
 function renderPie(){
-  var recs = state.filtered;
+  // Always the whole sheet, in its own row order — not state.filtered
+  // (that's the bottom table's filtered/date-sorted view, see §8).
+  var recs = activeSheet().rows;
   renderPieList(recs);
   var slices = pieSlices(recs, state.pieMode);
   var total = slices.reduce(function(s, x){ return s + Math.max(0, x.qty); }, 0);
-  renderPieChart(slices, total);
-  renderPieLegend(slices, total);
+  renderPieChart(slices, total, state.pieMode);
 }
 function wirePieToggle(){
   var box = document.getElementById("epPieToggle");
@@ -2642,6 +2750,151 @@ function wirePieToggle(){
   });
 }
 wirePieToggle();
+
+/* ============================================================
+   7. Filter bar for the bottom (full) table only
+   ------------------------------------------------------------
+   Mirrors the Project Report combobox component (same .cb/.pop/
+   .opt/.chips CSS, new `epCard`-prefixed element ids). Filtering
+   here only ever touches state.filters/state.filtered, which
+   feed the KPI band, its row count, and the card list below —
+   never the pie or its item list (§6), which always show the
+   whole sheet regardless of what's filtered here.
+   ============================================================ */
+var openPop = null;
+function cid(k){ return "epcard_" + k.replace(/[^a-z0-9]/gi, "_"); }
+function renderCardFilterBar(){
+  var g = document.getElementById("epCardFgrid");
+  g.innerHTML = "";
+  FILTER_COLS.forEach(function(c){
+    var f = document.createElement("div");
+    f.className = "field";
+    f.innerHTML =
+      '<label id="'+cid(c.key)+'">'+esc(c.label)+'</label>'+
+      '<div class="cb" data-cb="'+esc(c.key)+'">'+
+        '<input type="text" placeholder="All" role="combobox" aria-expanded="false" '+
+               'aria-autocomplete="list" aria-labelledby="'+cid(c.key)+'" autocomplete="off">'+
+        '<span class="badge" hidden>0</span><span class="caret">▾</span>'+
+      '</div>'+
+      '<div class="pop" hidden>'+
+        '<div class="popbar"><button type="button" data-act="all">Select all</button>'+
+        '<button type="button" data-act="none">Clear</button></div>'+
+        '<div class="popbody" role="listbox"></div>'+
+      '</div>';
+    g.appendChild(f);
+    wireCardCombo(f, c);
+  });
+}
+function wireCardCombo(field, col){
+  var box = field.querySelector(".cb"), input = field.querySelector("input"), pop = field.querySelector(".pop");
+  var body = field.querySelector(".popbody"), btnAll = field.querySelector('[data-act="all"]'), btnNone = field.querySelector('[data-act="none"]');
+  var cursor = -1, lastOpts = [];
+  function options(){
+    var m = state.facets[col.key] || new Map();
+    var q = input.value.trim().toLowerCase();
+    var arr = [];
+    m.forEach(function(n, v){ if (!q || v.toLowerCase().indexOf(q) !== -1) arr.push([v, n]); });
+    var sel = state.filters[col.key];
+    if (sel) sel.forEach(function(v){ if (!m.has(v) && (!q || v.toLowerCase().indexOf(q) !== -1)) arr.push([v, 0]); });
+    arr.sort(function(a, b){ return b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0); });
+    return arr;
+  }
+  function paint(){
+    lastOpts = options();
+    var sel = state.filters[col.key];
+    btnAll.textContent = "Select all" + (lastOpts.length ? " (" + nfInt.format(lastOpts.length) + ")" : "");
+    btnAll.disabled = !lastOpts.length;
+    btnNone.hidden = !(sel && sel.size);
+    if (!lastOpts.length){ body.innerHTML = '<div class="none">No matching values</div>'; return; }
+    body.innerHTML = lastOpts.slice(0, 250).map(function(o, i){
+      var on = sel && sel.has(o[0]);
+      return '<div class="opt'+(o[0]===BLANK?" blank":"")+(i===cursor?" cursor":"")+'" role="option" '+
+             'aria-selected="'+(on?"true":"false")+'" data-v="'+esc(o[0])+'">'+
+             '<span class="tick">✓</span><span class="t">'+esc(o[0])+'</span>'+
+             '<span class="n">'+nfInt.format(o[1])+'</span></div>';
+    }).join("") + (lastOpts.length > 250 ? '<div class="none">'+nfInt.format(lastOpts.length-250)+' more — keep typing to narrow</div>' : "");
+  }
+  function open(){
+    if (openPop && openPop !== pop) openPop.hidden = true;
+    openPop = pop; pop.hidden = false; input.setAttribute("aria-expanded", "true"); paint();
+  }
+  function close(){
+    pop.hidden = true; input.setAttribute("aria-expanded", "false"); cursor = -1;
+    if (openPop === pop) openPop = null;
+  }
+  box.addEventListener("click", function(){ input.focus(); open(); });
+  input.addEventListener("input", function(){ cursor = -1; open(); });
+  input.addEventListener("keydown", function(e){
+    var opts = body.querySelectorAll(".opt");
+    if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if (pop.hidden) { open(); return; }
+      cursor += e.key === "ArrowDown" ? 1 : -1;
+      if (cursor < 0) cursor = opts.length - 1;
+      if (cursor >= opts.length) cursor = 0;
+      paint();
+      var el = body.querySelectorAll(".opt")[cursor];
+      if (el) el.scrollIntoView({ block:"nearest" });
+    } else if (e.key === "Enter"){
+      e.preventDefault();
+      var t = opts[cursor < 0 ? 0 : cursor];
+      if (t) toggleFilter(col.key, t.dataset.v);
+    } else if (e.key === "Escape"){ close(); input.blur(); }
+    else if (e.key === "Backspace" && input.value === "" && state.filters[col.key] && state.filters[col.key].size){
+      toggleFilter(col.key, Array.from(state.filters[col.key]).pop());
+    }
+  });
+  body.addEventListener("mousedown", function(e){
+    var o = e.target.closest(".opt");
+    if (!o) return;
+    e.preventDefault();
+    toggleFilter(col.key, o.dataset.v);
+  });
+  btnAll.addEventListener("mousedown", function(e){
+    e.preventDefault();
+    if (!lastOpts.length) return;
+    var s = state.filters[col.key] || new Set();
+    lastOpts.forEach(function(o){ s.add(o[0]); });
+    state.filters[col.key] = s;
+    render();
+  });
+  btnNone.addEventListener("mousedown", function(e){ e.preventDefault(); delete state.filters[col.key]; render(); });
+  input.addEventListener("blur", function(){ setTimeout(function(){ if (!pop.contains(document.activeElement)) close(); }, 120); });
+  field._refresh = function(){
+    var sel = state.filters[col.key], n = sel ? sel.size : 0;
+    var badge = field.querySelector(".badge");
+    badge.hidden = !n; badge.textContent = n;
+    box.classList.toggle("active", !!n);
+    input.placeholder = n ? (n === 1 ? Array.from(sel)[0] : n + " selected") : "";
+    if (!pop.hidden) paint();
+  };
+}
+function toggleFilter(key, value){
+  if (!state.filters[key]) state.filters[key] = new Set();
+  var s = state.filters[key];
+  if (s.has(value)) s.delete(value); else s.add(value);
+  if (!s.size) delete state.filters[key];
+  render();
+}
+function renderCardChips(){
+  var box = document.getElementById("epCardChips"), out = [];
+  FILTER_COLS.forEach(function(c){
+    var s = state.filters[c.key];
+    if (!s) return;
+    s.forEach(function(v){
+      out.push('<span class="chip"><b>'+esc(c.label)+'</b> '+esc(v)+
+        '<button aria-label="Remove filter" data-k="'+esc(c.key)+'" data-v="'+esc(v)+'">×</button></span>');
+    });
+  });
+  box.innerHTML = out.join("");
+  box.querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click", function(){ toggleFilter(b.dataset.k, b.dataset.v); });
+  });
+  document.querySelectorAll("#epCardFgrid .field").forEach(function(f){ if (f._refresh) f._refresh(); });
+  var mfCount = document.getElementById("epCardMfCount");
+  mfCount.hidden = !out.length; mfCount.textContent = out.length;
+  document.getElementById("epCardMfToggle").classList.toggle("hasFilters", !!out.length);
+}
 
 /* ============================================================
    9. The grouped line-item list
@@ -2687,7 +2940,9 @@ function renderList(){
   var host = document.getElementById("epList"), moreWrap = document.getElementById("epLoadMoreWrap");
   var data = state.filtered;
   if (!data.length){
-    host.innerHTML = '<div class="empty" style="padding:52px 16px"><b>No rows</b>No data in this sheet.</div>';
+    host.innerHTML = anyFilter()
+      ? '<div class="empty" style="padding:52px 16px"><b>No rows match</b>Remove a filter, or clear them all, to see rows again.</div>'
+      : '<div class="empty" style="padding:52px 16px"><b>No rows</b>No data in this sheet.</div>';
     moreWrap.hidden = true;
     return;
   }
@@ -2698,7 +2953,7 @@ function renderList(){
 function renderCount(){
   var t = activeSheet().rows.length, f = state.filtered.length;
   document.getElementById("epRowCount").innerHTML =
-    "Showing <b>" + nfInt.format(f) + "</b> of " + nfInt.format(t) + " rows";
+    "Showing <b>" + nfInt.format(f) + "</b> of " + nfInt.format(t) + " rows" + (anyFilter() ? "" : " (unfiltered)");
 }
 
 /* ============================================================
@@ -2709,12 +2964,13 @@ function render(){
   state.visibleCount = PAGE_SIZE;
   renderKpis();
   renderPie();
+  renderCardChips();
   renderCount();
   renderList();
 }
 function switchSheet(sheet){
   state.sheet = sheet;
-  state.visibleCount = PAGE_SIZE;
+  state.filters = {}; state.visibleCount = PAGE_SIZE;
   state.totals = totalsOf(activeSheet().rows);
   render();
 }
@@ -2765,6 +3021,7 @@ function epInstall(file, parsed){
       '<span class="mono">'+esc(file.name)+'</span><span class="dot"></span>'+
       '<span>'+esc(parsed.sheet.name)+'</span><span class="dot"></span>'+
       nfInt.format(parsed.sheet.rows.length)+' rows<span class="dot"></span><span>read-only</span>';
+    renderCardFilterBar();
     switchSheet(parsed.sheet);
     epCacheFile(file);
   }, 30);
@@ -2818,6 +3075,23 @@ window.addEventListener("drop", function(e){
 document.getElementById("epLoadMore").addEventListener("click", function(){
   state.visibleCount += PAGE_SIZE;
   renderList();
+});
+
+/* ---------- bottom-table filter bar: clear-all + mobile drawer ---------- */
+document.getElementById("epCardClearAll").addEventListener("click", function(){ state.filters = {}; render(); });
+var epCardFiltersSection = document.getElementById("epCardFiltersSection");
+var epCardMfToggle = document.getElementById("epCardMfToggle");
+epCardMfToggle.addEventListener("click", function(){
+  var open = !epCardFiltersSection.classList.contains("mExpanded");
+  epCardFiltersSection.classList.toggle("mExpanded", open);
+  epCardMfToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+document.addEventListener("click", function(e){
+  if (epCardFiltersSection.classList.contains("mExpanded") && !e.target.closest("#epCardFiltersSection")) {
+    epCardFiltersSection.classList.remove("mExpanded");
+    epCardMfToggle.setAttribute("aria-expanded", "false");
+  }
+  if (openPop && !e.target.closest(".field")) { openPop.hidden = true; openPop = null; }
 });
 
 function epSyncHeaderHeight(){
