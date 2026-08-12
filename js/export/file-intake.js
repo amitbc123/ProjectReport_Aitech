@@ -120,6 +120,15 @@ epToggleViewBtn.addEventListener("click", function(){
   epDash.classList.toggle("vizOpen", show);
 });
 
+/* ---------- mobile status/KPI band (collapsed by default) ---------- */
+var epKpiBand = document.getElementById("epKpis");
+var epKpiToggle = document.getElementById("epKpiToggle");
+epKpiToggle.addEventListener("click", function(){
+  var open = !epKpiBand.classList.contains("mExpanded");
+  epKpiBand.classList.toggle("mExpanded", open);
+  epKpiToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+
 /* ---------- filter bar (Table/Chart/Buttons block): clear-all + mobile drawer ---------- */
 document.getElementById("epCardClearAll").addEventListener("click", function(){ state.filters = {}; render(); });
 var epCardFiltersSection = document.getElementById("epCardFiltersSection");

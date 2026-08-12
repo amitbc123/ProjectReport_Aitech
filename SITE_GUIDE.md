@@ -66,7 +66,7 @@ Manual picking/drag-and-drop only (there's no automatic network-folder connectio
 | | Computer (desktop) | iPhone / mobile |
 |---|---|---|
 | **Filters** | A full row of boxes, always visible | Collapse behind a "Filters" button that opens as a scrollable list, to save space |
-| **KPI row** | 5 cards in one row | 2 cards per row |
+| **KPI row** | 5 cards in one row, always visible | Collapsed by default behind a "Status" button, 2 cards per row when opened |
 | **Export Plan table** (7 columns) | All columns visible at once | Scrolls **sideways** to keep the text a readable size, instead of squeezing everything into a narrow screen |
 | **Automatic network-folder connection** (Project Report only) | Works (Chrome/Edge only) — the site loads the newest file on its own | **Not available** (Apple doesn't allow this kind of folder access in Safari) — you need to pick a file manually, or rely on the saved "last file" from your previous visit |
 | **Switching between Project Report and Export Plan** | A small button next to the title | The same button, sized for touch |

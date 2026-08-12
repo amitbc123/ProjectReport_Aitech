@@ -269,6 +269,11 @@
     .mfbar.hasFilters .badge{background:var(--gold)}
     .filters.mExpanded .mfbar{border-color:var(--gold); background:#FEFCF7}
     .filters.mExpanded .mfbar .mfCaret{transform:rotate(180deg)}
+    .kpiband{margin-top:16px}
+    .kpiband .kpis{display:none; margin-top:8px}
+    .kpiband.mExpanded .kpis{display:grid}
+    .kpiband.mExpanded .mfbar{border-color:var(--gold); background:#FEFCF7}
+    .kpiband.mExpanded .mfbar .mfCaret{transform:rotate(180deg)}
     .fpanel{display:none}
     .filters.mExpanded .fpanel{
       display:block; position:absolute; left:0; right:0; top:100%; margin-top:6px;

@@ -83,7 +83,13 @@
       </div>
     </section>
 
-    <section class="kpis" id="kpis"></section>
+    <section class="kpiband" id="kpiband">
+      <button type="button" class="mfbar kpiToggle" id="kpiToggle" aria-expanded="false" aria-controls="kpis">
+        <span class="mfLabel">Status</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
+      <div class="kpis" id="kpis"></div>
+    </section>
     <div class="rule kpiRule"></div>
     <div class="quality" id="quality"></div>
 
@@ -193,6 +199,10 @@
   <main id="epDash" hidden>
 
     <section class="kpis eppinned" id="epKpis">
+      <button type="button" class="mfbar kpiToggle" id="epKpiToggle" aria-expanded="false" aria-controls="epKpiCards">
+        <span class="mfLabel">Status</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
       <div class="kpis" id="epKpiCards"></div>
       <button type="button" class="epToggleBtn" id="epToggleViewBtn" aria-expanded="false" aria-controls="epViewBlock">
         <span>Chart · Buttons</span><i aria-hidden="true">▾</i>

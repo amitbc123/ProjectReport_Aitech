@@ -38,6 +38,10 @@
   }
   @media (max-width:640px){
     #page-export .kpis.eppinned{padding:10px 2px 8px}
+    #page-export .kpis.eppinned #epKpiCards{display:none; margin-top:8px}
+    #page-export .kpis.eppinned.mExpanded #epKpiCards{display:grid}
+    #page-export .kpis.eppinned.mExpanded .kpiToggle{border-color:var(--gold); background:#FEFCF7}
+    #page-export .kpis.eppinned.mExpanded .kpiToggle .mfCaret{transform:rotate(180deg)}
   }
 
   /* ============================================================

@@ -166,6 +166,15 @@ document.addEventListener("click", function(e){
   }
 });
 
+/* ---------- mobile status/KPI band (collapsed by default) ---------- */
+var kpiband = document.getElementById("kpiband");
+var kpiToggle = document.getElementById("kpiToggle");
+kpiToggle.addEventListener("click", function(){
+  var open = !kpiband.classList.contains("mExpanded");
+  kpiband.classList.toggle("mExpanded", open);
+  kpiToggle.setAttribute("aria-expanded", open ? "true" : "false");
+});
+
 function syncHeaderHeight(){
   document.documentElement.style.setProperty("--headerH", topbar.offsetHeight + "px");
 }
