@@ -475,12 +475,24 @@
      as one colored block via `.epsl-frame`, and every cell keeps
      the same data-group/data-project/data-pn wiring the pie/
      buttons pick and hover interactions depend on (see the JS).
+
+     The table has no height cap / internal scrollbar by default — it
+     grows to fit its rows, and the page itself is the only scrolling
+     surface (one scrollbar, not two). Only once the viz panel is
+     opened (`#epDash.vizOpen`, toggled alongside #epViewBlock's
+     `hidden` attribute) does the table go back into a bounded,
+     internally-scrolling box (`height:var(--eppie-h)` +
+     `.eppie-listscroll{overflow-y:auto}`) — otherwise an already-tall
+     table plus a full-height chart/buttons panel below it would make
+     the page enormous.
      ============================================================ */
   .eppie-wrap{
     margin-top:0;
     --eppie-h:560px;
-    display:flex; flex-direction:column; height:var(--eppie-h);
+    display:flex; flex-direction:column;
   }
+  #epDash.vizOpen .eppie-wrap{ height:var(--eppie-h); min-height:0; }
+  #epDash.vizOpen .eppie-listscroll{ flex:1; min-height:0; overflow-y:auto; }
   .eppie-vizwrap{
     margin-top:16px;
     --eppie-h:480px;
@@ -539,7 +551,7 @@
   }
   .epsl-head .epsl-qty,.epsl-head .epsl-val{text-align:right}
   .eppie-listscroll{
-    flex:1; overflow-y:auto; scrollbar-width:thin; position:relative;
+    scrollbar-width:thin; position:relative;
     display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:0 8px;
     padding:0 14px; align-content:start;
   }
@@ -2617,9 +2629,6 @@ var FILTER_COLS = [
   { key:"projectNo",   label:"Project #" },
   { key:"projectName", label:"Customer / project" },
   { key:"pn",           label:"P/N" },
-  { key:"tech",         label:"Tech" },
-  { key:"priority",     label:"Priority" },
-  { key:"type",         label:"Type" },
   { key:"shipDate",     label:"Ship date" }
 ];
 function facetValues(rec, key){
@@ -3380,12 +3389,18 @@ window.addEventListener("drop", function(e){
 // the visualization, right next to the KPI cards it summarizes. render()
 // keeps populating it even while hidden, so it's ready to show the
 // instant it's revealed.
+// The table has no fixed height / internal scrollbar of its own by
+// default — it grows with its content and the page is the only thing
+// that scrolls. Opening the viz panel (#epDash.vizOpen, see CSS) puts
+// the table back in its bounded, internally-scrolling box instead, so
+// the page doesn't grow to "table's full height + chart/buttons" tall.
 var epToggleViewBtn = document.getElementById("epToggleViewBtn");
 var epViewBlock = document.getElementById("epViewBlock");
 epToggleViewBtn.addEventListener("click", function(){
   var show = epViewBlock.hidden;
   epViewBlock.hidden = !show;
   epToggleViewBtn.setAttribute("aria-expanded", show ? "true" : "false");
+  epDash.classList.toggle("vizOpen", show);
 });
 
 /* ---------- filter bar (Table/Chart/Buttons block): clear-all + mobile drawer ---------- */
