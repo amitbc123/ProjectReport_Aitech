@@ -532,13 +532,19 @@
     transition:background .12s, border-color .12s, box-shadow .12s;
   }
   .epsl-frame.grouphover{border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 14%, white)}
-  /* Selected (.hl) needs to read as unmistakably different from the
-     baseline framed-but-idle look, not just "a bit more of the same
-     tint" — solid-ish fill, a thick border, and an outer glow ring. */
+  /* Selected (.hl) uses the *same visual language* as a picked pie slice
+     or Buttons-view button (.eppie-chart path.picked / .eppie-btn.picked)
+     — a solid black frame, not another shade of the group's own color —
+     so "this is selected" reads identically everywhere, and unmistakably
+     (a black border reads as "chosen" regardless of the group's own
+     color, where a same-hue-but-stronger tint could still read as "just
+     a bit more of the same idle framing"). The color fill stays tinted
+     in the group's own color underneath, so identity is still visible.
+   */
   .epsl-frame.hl{
-    border-width:3px; border-color:var(--frame-color);
-    background:color-mix(in srgb, var(--frame-color) 38%, white);
-    box-shadow:0 0 0 3px color-mix(in srgb, var(--frame-color) 22%, white);
+    border-width:3px; border-color:var(--ink);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+    box-shadow:0 2px 8px rgba(18,22,28,.22);
   }
   .epsl-cell{
     display:flex; align-items:center; min-width:0; cursor:pointer;
@@ -546,7 +552,11 @@
     transition:background .12s, font-weight .12s;
   }
   .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 12%, white)}
-  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 38%, white); font-weight:700}
+  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 32%, white); font-weight:700; color:var(--ink)}
+  /* A blank spacer row between groups (see renderPieList) — an explicit
+     sized grid item, not a grid row-gap, since a uniform row-gap would
+     also open a gap *within* a group, between its own member rows. */
+  .epsl-gap{display:block; height:7px; grid-column:1/-1}
   .epsl-proj{grid-column:1}
   .epsl-pn{grid-column:2}
   .epsl-qty{grid-column:3; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
@@ -603,9 +613,9 @@
   }
   .eppie-btn:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
   .eppie-btn.picked{
-    border-width:2px; border-color:var(--frame-color);
-    background:color-mix(in srgb, var(--frame-color) 38%, white);
-    box-shadow:0 0 0 3px color-mix(in srgb, var(--frame-color) 22%, white);
+    border-width:3px; border-color:var(--ink);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+    box-shadow:0 2px 8px rgba(18,22,28,.22);
     font-weight:700; color:var(--ink);
   }
   .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
@@ -2977,6 +2987,10 @@ function renderPieList(recs){
     gridRow += groupLen;
     groupIdx++;
     i = j + 1;
+    if (i < items.length){
+      out.push('<span class="epsl-gap" style="grid-row:'+gridRow+'"></span>');
+      gridRow += 1;
+    }
   }
   host.innerHTML = out.join("");
   wireListInteractions(host);

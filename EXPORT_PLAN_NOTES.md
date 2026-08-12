@@ -871,6 +871,37 @@ surfaced once someone was actually using it.
   view and then switching to the other shows the same slice already
   marked picked, with no extra state to reconcile.
 
+### 5.9 Eighth round: selection border matches the pie/buttons exactly, spacing between groups
+
+Two follow-ups to §5.8's highlight fix, both quick:
+
+- **`.epsl-frame.hl`'s border is now literally `var(--ink)`** (solid
+  black), not the group's own `--frame-color` at a higher mix percentage.
+  The request was explicit: match the same visual language already used
+  for a picked pie wedge (`.eppie-chart path.picked{stroke:var(--ink);
+  stroke-width:3px}`) and a picked Buttons-view button
+  (`.eppie-btn.picked` — which, on reflection, *also* still used
+  `border-color:var(--frame-color)`, so it got the same fix here for
+  consistency, even though only the list's frame was called out by name).
+  The color-mix'd fill underneath (`--frame-color` at 32%) stays, so the
+  group's own identity color is still visible — only the *border*, the
+  part that actually signals "selected," went to black. This reads as
+  unambiguous regardless of the group's own hue, where a same-hue
+  darker-tint border could still look like "idle, just a bit stronger" at
+  a glance (which was the substance of the original complaint).
+- **A visible gap between groups.** `.eppie-listscroll` is one continuous
+  CSS grid (see §5.2/§5.3), so a uniform `row-gap` was not an option — it
+  would have opened the same gap *inside* a multi-row group, between its
+  own member rows, undoing the "one visual block" effect the frame exists
+  to create. Instead, `renderPieList` now emits an explicit spacer
+  element (`<span class="epsl-gap">`, `height:7px`, no color/border) into
+  its own dedicated grid row between one group's last row and the next
+  group's first — `gridRow` advances by one extra when there's a
+  following group. Deliberately a real sized grid item and not an
+  unreferenced row left to auto-collapse: an empty grid track has no
+  content to size itself from and can't be trusted to render at any
+  particular height across browsers/versions.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
