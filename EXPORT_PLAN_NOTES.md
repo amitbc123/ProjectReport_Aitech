@@ -1066,10 +1066,44 @@ requests, addressed together because they all touch the same block:
   scrolled), they scroll in lockstep with no header-sync JS needed. The
   page body itself never scrolls horizontally — only this one box does.
 
-Net effect: the Export Plan page's default view (no file interaction
-yet) is now just the KPI row and its reveal button — the detailed
-table/chart/buttons view, and the filters that scope it, are one click
-away rather than always on screen.
+Net effect (superseded within the same day — see §5.12): this round's
+first version hid the filter bar and the table behind the reveal button
+too, alongside Chart/Buttons. That wasn't what was asked for.
+
+### 5.12 Eleventh round: only the pie/buttons visualization collapses — the table and its filters stay on screen
+
+Same-day correction to §5.11: the request was for the table (with its
+filter bar) to always be visible, right under the KPI row — only the
+P/N↔Project breakdown (the donut or the button grid) should be behind the
+reveal button, alongside its own two toggles (P/N↔Project and Chart↔
+Buttons).
+
+- **`#epCardFiltersSection` and `.eppie-wrap` (the table) moved back out
+  of `#epViewBlock`** to sit directly after the KPI row's rule, always
+  rendered. `#epViewBlock` now wraps only a single `.panel.eppie-vizwrap`
+  — the old `.eppie-chart-col` content (the P/N/Project toggle, the
+  Chart/Buttons toggle, and `#epPieChart`/`#epPieButtons`) — and that's
+  the only thing the KPI-row button shows or hides.
+- **"Table" is no longer one of the toggle's options** — there's nothing
+  left for it to switch to, since the table isn't part of this panel
+  anymore. `#epPieViewToggle` is back to a plain two-way Chart/Buttons
+  toggle (mirroring the P/N/Project toggle it sits beside), and
+  `wirePieViewToggle`'s `views` map dropped its `table` entry. The
+  button's own label changed from "Table · Chart · Buttons" to "Chart ·
+  Buttons" to match.
+- **CSS split accordingly**: `.eppie-wrap` (the table's panel) now owns
+  the flex-column/height/scroll behavior directly — no more
+  `.eppie-tablecol` wrapper div, since the table is the *only* content of
+  that panel now, not one of three panes sharing a box with a chart and a
+  button grid. `.eppie-vizwrap` (renamed from `.eppie-chart-col`) keeps
+  that behavior for the collapsible panel instead. Both get their own
+  `--eppie-h` (the table taller by default, 560/480/420px across the
+  three breakpoints, than the viz panel's 480/420/340px) since they're
+  independent panels now, not sized off one shared variable.
+- Net effect, corrected: the Export Plan page's default view (once a
+  file is loaded) is the KPI row, the filter bar, and the full table —
+  all three always on screen, exactly as before this round started. Only
+  the pie/buttons breakdown is one click away.
 
 ## 6. Remembering the last file (Export Plan)
 
