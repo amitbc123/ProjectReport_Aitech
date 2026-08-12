@@ -1140,6 +1140,66 @@ Same-day follow-up:
   with `scrollHeight > clientHeight` (internal scroll again); closing
   reverts it.
 
+### 5.14 Thirteenth round: sticky filter bar, no more filter header row, and merging back the same-record P/N lines
+
+Three more requests, same day:
+
+- **`#epCardFiltersSection`'s `.head` row (the "Filter this table" eyebrow
+  + the old Clear-all button) is gone.** Clear all now lives in a new
+  `.frow2` row directly under `.fgrid` (the field dropdowns), alongside
+  `.chips` — `.frow2{display:flex}` with `.chips{flex:1}` means the chip
+  list fills the left side and Clear all sits pinned to the right edge
+  whether or not any chips are actually rendered (an empty `.chips` just
+  collapses via the existing `.chips:empty{display:none}` rule, which
+  doesn't affect the button's position since it isn't relying on
+  `justify-content` to place it).
+- **The filter bar is now sticky, stacked directly under the KPI band.**
+  `#page-export #epCardFiltersSection{ position:sticky; top:calc(
+  var(--epHeaderH,56px) + var(--epKpisH,150px)) }` — two ids (2,0,0) is
+  what's needed to beat `#page-export .filters{ top:var(--epHeaderH) }`
+  (1,1,0), the same specificity trap documented in §5.12. `--epKpisH` is
+  a new sibling to `--epHeaderH`: `epSyncKpisHeight()` mirrors
+  `epSyncHeaderHeight()`, a `ResizeObserver` on `#epKpis` keeping the
+  variable equal to the KPI band's *real* rendered height (it reflows at
+  the 1180/640px breakpoints, so a hardcoded number would drift). The
+  old mobile-only `#page-export #epCardFiltersSection{position:relative;
+  top:auto}` override from §5.12 — needed back when sticking here caused
+  an overlap with `.eppie-wrap` — is gone; that was a symptom of the
+  table being wrongly inside the same collapsible block as the filters,
+  fixed properly in §5.12 itself, so the override was already inert
+  dead weight by this point. `.filters.mExpanded .fpanel`'s mobile
+  max-height budget also now subtracts `--epKpisH` alongside
+  `--epHeaderH`, since the expanded dropdown has to fit under *both*
+  sticky bars, not just the header.
+- **P/N lines from the same source record merge again — but now
+  correctly scoped.** §5.11 removed all cell-merging because a project
+  can span several *different* source records with genuinely different
+  dates/values (§5.10's original bug: the old merge logic keyed off
+  "same project," which conflated that with "same record"). The
+  complaint this round was the opposite case: two P/N lines that *are*
+  the same record (the classic §4.2 scenario — one Excel row's P/N cell
+  holding several newline-separated part numbers) were now showing the
+  identical Value repeated once per line, which is exactly the
+  redundancy the original merge feature existed to avoid.
+  `flattenItems` tags each flattened row with `recKey` (`r._sheet +
+  "|" + r._row` — the record's own provenance fields, already unique
+  since only one sheet is ever parsed). `renderPieList` groups twice
+  now: the outer pass is unchanged (consecutive same-project rows, one
+  `.epsl-frame`); a new inner pass splits each outer group into
+  sub-groups of consecutive rows sharing one `recKey`. A sub-group's
+  Value cell renders once, spanning its rows (`.epsl-val.merged`, a
+  revived version of §5.4's merged-cell CSS, now scoped correctly). A
+  `.epsl-sep` divider is drawn *only between sub-groups* — never within
+  one, since a sub-group's rows share a figure rather than differing.
+  Ship Date and Remarks deliberately stay per-row, unmerged — same
+  record-level ownership as Value, but the request specifically and
+  repeatedly called out only "the price" as what should be shown once,
+  so only Value was touched, to avoid guessing at unrequested scope.
+  Verified against a synthetic project with 5 P/Ns split 2-and-3 across
+  two source rows: two merged Value cells ($ for the 2, $ for the 3),
+  exactly one separator between them, and the 2/3 split preserved in
+  Qty/Remarks/Ship Date shown per line.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
