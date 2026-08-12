@@ -680,11 +680,15 @@
     top:calc(var(--epHeaderH, 56px) + var(--epKpisH, 150px));
     margin-top:0;
   }
-  .frow2{display:flex; align-items:flex-start; gap:12px; padding:0 16px 14px}
-  .frow2 .chips{flex:1; min-width:0; padding:0}
-  .frow2 #epCardClearAll{flex:0 0 auto}
+  /* Clear all sits on the same row as the filter fields themselves,
+     not the chips row below — #epCardFgrid (an id, so it wins over the
+     shared .fgrid class rule regardless of breakpoint) hands its own
+     padding to the wrapping .fgridrow instead, so the row's edges line
+     up with the panel padding exactly as .fgrid's used to on its own. */
+  .fgridrow{display:flex; align-items:flex-end; gap:12px; padding:14px 16px 0}
+  #epCardFgrid{padding:0; flex:1; min-width:0}
   @media (max-width:640px){
-    .frow2{padding:0 12px 12px}
+    .fgridrow{flex-direction:column; align-items:stretch; padding:12px 12px 0; gap:10px}
   }
 </style>
 </head>
@@ -888,11 +892,11 @@
         <span class="mfCaret" aria-hidden="true">▾</span>
       </button>
       <div class="fpanel" id="epCardFpanel">
-        <div class="fgrid" id="epCardFgrid"></div>
-        <div class="frow2">
-          <div class="chips" id="epCardChips"></div>
+        <div class="fgridrow">
+          <div class="fgrid" id="epCardFgrid"></div>
           <button class="btn ghost" id="epCardClearAll">Clear all</button>
         </div>
+        <div class="chips" id="epCardChips"></div>
       </div>
     </section>
 
@@ -2841,10 +2845,13 @@ function sliceMoneyTotal(recs, mode, sl){
   });
   return sum;
 }
-// Slice-based list highlight — used when the *pie side* is the one
-// driving it (hover/pick on a wedge). Group-based highlight
-// (highlightPieListGroup, below) is what the *list side* uses instead,
-// since a multi-P/N group in P/N mode has no single matching slice.
+// Slice-based list highlight — used only when the *pie/buttons side* is
+// the one driving it (hover/pick on a wedge or a button); it matches
+// every row anywhere in the table sharing that P/N or Project #, which
+// is correct there (that's what a slice *is*) but wrong for a table row
+// click, which must never highlight a row outside its own group —
+// highlightPieListGroup (below), keyed by data-group, is what a list
+// click always uses instead.
 function highlightPieListSlice(mode, sl){
   var cells = document.querySelectorAll("#epPieList .epsl-cell, #epPieList .epsl-frame");
   cells.forEach(function(c){ c.classList.remove("hl"); });
@@ -2860,8 +2867,10 @@ function highlightPieListSlice(mode, sl){
 }
 // Group-based list highlight, keyed by data-group rather than by slice —
 // this is what a list click always uses (see wireListInteractions), so a
-// multi-row group always highlights as a whole, never a single row inside
-// it. For a size-1 group this naturally highlights exactly that one row.
+// click only ever marks the clicked row's own group (its consecutive
+// same-Project# run) — never a row in a different group that happens to
+// share a P/N or Project # with it. For a size-1 group this naturally
+// highlights exactly that one row.
 function highlightPieListGroup(host, groupId){
   host.querySelectorAll(".epsl-cell, .epsl-frame").forEach(function(c){ c.classList.remove("hl"); });
   if (groupId == null) return;
@@ -2921,10 +2930,6 @@ function pieTogglePick(idx){
     pieShowSlice(pieState.slices[idx]);
     highlightPieListSlice(pieState.mode, pieState.slices[idx]);
   }
-}
-function pieFindSliceIndex(key){
-  for (var i = 0; i < pieState.slices.length; i++) if (pieState.slices[i].key === key) return i;
-  return -1;
 }
 // The donut fills whatever box its column gives it (see .eppie-chart
 // svg{width/height:100%} — no viewBox margin is spent on labels anymore:
@@ -3079,9 +3084,6 @@ function renderPieList(recs){
   host.innerHTML = out.join("");
   wireListInteractions(host);
 }
-function groupRowCount(host, groupId){
-  return host.querySelectorAll('.epsl-proj[data-group="'+groupId+'"]').length;
-}
 function wireListInteractions(host){
   host.querySelectorAll("[data-group]").forEach(function(el){
     var g = el.dataset.group;
@@ -3092,23 +3094,25 @@ function wireListInteractions(host){
       host.querySelectorAll('[data-group="'+g+'"]').forEach(function(x){ x.classList.remove("grouphover"); });
     });
   });
-  // A click always marks the WHOLE group it belongs to (never a single
-  // row inside a bigger group) — for a size-1 group that's just its one
-  // row. When the click also maps to exactly one pie slice (Project mode,
-  // always; P/N mode, only for a size-1 group), it picks that slice too,
-  // which happens to produce the identical highlight via
-  // highlightPieListSlice — so only the genuinely ambiguous case (P/N
-  // mode, multi-row group — several different P/N slices, no single one
-  // represents "the group") needs its own group-based highlight path.
+  // A click always marks exactly the clicked row's own group (its
+  // consecutive same-Project# run, data-group) — never anything outside
+  // it. This used to route through pieTogglePick/highlightPieListSlice
+  // whenever the click unambiguously mapped to one pie slice (Project
+  // mode always; P/N mode for a size-1 group), on the theory that doing
+  // so "happens to produce the identical highlight" — false in general:
+  // a slice matches *every* row sharing that P/N or Project # anywhere
+  // in the table, including rows in a completely different group that
+  // simply happen to reuse the same P/N (a real, common case — the same
+  // part number ordered under two unrelated projects). Always going
+  // through the group-based path here fixes that: it only ever matches
+  // `data-group`, so a click can never highlight a row outside the
+  // clicked row's own group, regardless of P/N/Project mode or group
+  // size. The pie/buttons panel itself is unaffected — hovering or
+  // clicking a slice there still legitimately highlights every matching
+  // row across the whole table, since that's what a slice *is*.
   host.querySelectorAll(".epsl-cell").forEach(function(c){
     c.addEventListener("click", function(){
       var groupId = c.dataset.group;
-      if (pieState.mode === "project" || groupRowCount(host, groupId) <= 1){
-        var key = pieState.mode === "project" ? c.dataset.project : (c.dataset.pn || "").split("|")[0];
-        var idx = key ? pieFindSliceIndex(key) : -1;
-        if (idx !== -1) pieTogglePick(idx);
-        return;
-      }
       var alreadyOn = host.querySelector('.epsl-cell[data-group="'+groupId+'"].hl') !== null;
       if (pieState.pickedIdx !== null) pieTogglePick(pieState.pickedIdx);
       highlightPieListGroup(host, alreadyOn ? null : groupId);
