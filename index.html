@@ -452,40 +452,38 @@
   }
 
   /* ============================================================
-     Export Plan — the collapsible Table/Chart/Buttons block
+     Export Plan — the full table (always visible) and the
+     collapsible pie/buttons visualization
      ------------------------------------------------------------
-     Hidden by default (#epViewBlock[hidden]), revealed by the
-     .epToggleBtn above. Holds the filter bar (moved here — the
-     bottom card list it used to sit above is gone, see the JS) and
-     the eppie-wrap panel with its P/N↔Project and Table/Chart/
-     Buttons toggles.
-
-     Just one column now, full panel width. There used to be a
-     second, always-visible "item list" pane (Project/P·N/Qty/Value)
-     living beside this column, resizable via a drag handle. That
-     list *is* now the Table view (renderPieList, expanded to 7
-     columns — Project, Project Name, P/N, Qty, Ship Date, Value in
-     US$, Remarks) and it renders into the width the second pane and
-     its resizer used to occupy. Chart and Buttons fill the same
-     full-width box when picked — see wirePieViewToggle.
+     .eppie-wrap (the full 7-column table — Project, Project Name,
+     P/N, Qty, Ship Date, Value in US$, Remarks — still built by
+     renderPieList/.eppie-listscroll) and its filter bar
+     (#epCardFiltersSection) are always on screen, right under the
+     KPI band. Only the P/N↔Project breakdown — .eppie-vizwrap, with
+     its Chart/Buttons toggle — is collapsed by default
+     (#epViewBlock[hidden]), revealed by the .epToggleBtn in the KPI
+     row. Both #epPieChart and #epPieButtons render off the same
+     filtered data as the table (state.filtered), so opening the
+     visualization never needs a re-render or loses a pick.
 
      A project can legitimately span several *different* source
-     rows (not just one row's several P/N lines), so — unlike the
-     old "merge the Value cell" behavior — every row keeps its own
-     Ship Date and Value; a thin `.epsl-sep` line is drawn between
-     the rows of a multi-row group instead, since those figures
-     usually differ within a group. The group still reads as one
-     colored block via `.epsl-frame`, and every cell keeps the same
-     data-group/data-project/data-pn wiring the pie/buttons pick and
-     hover interactions already depend on (see the JS).
-
-     The filter bar drives state.filters/state.filtered, which now
-     feeds the KPI band, the Table view, the Chart and the Buttons —
-     all four react to whatever's currently filtered.
+     rows (not just one row's several P/N lines), so every row in
+     the table keeps its own Ship Date and Value — nothing is
+     merged across a group's rows; a thin `.epsl-sep` line is drawn
+     between the rows of a multi-row group instead, since those
+     figures usually differ within a group. The group still reads
+     as one colored block via `.epsl-frame`, and every cell keeps
+     the same data-group/data-project/data-pn wiring the pie/
+     buttons pick and hover interactions depend on (see the JS).
      ============================================================ */
-  .eppie-wrap{margin-top:0}
-  .eppie-chart-col{
+  .eppie-wrap{
+    margin-top:0;
     --eppie-h:560px;
+    display:flex; flex-direction:column; height:var(--eppie-h);
+  }
+  .eppie-vizwrap{
+    margin-top:16px;
+    --eppie-h:480px;
     display:flex; flex-direction:column; height:var(--eppie-h);
     padding:14px 20px 10px;
   }
@@ -499,11 +497,10 @@
      (not a fixed max-width), and the SVG's own viewBox aspect ratio +
      default preserveAspectRatio="xMidYMid meet" does the "fit without
      distorting" part, so the donut is always as big as the available
-     space allows. Buttons/Table views: a scrollable grid/list in the
-     same box, shown instead of (never alongside) the chart — see
+     space allows. Buttons view: a scrollable grid in the same box,
+     shown instead of (never alongside) the chart — see
      wirePieViewToggle. */
   .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
-  .eppie-tablecol{width:100%; height:100%; display:flex; flex-direction:column; min-height:0}
   .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
   .eppie-chart svg{display:block; width:100%; height:100%}
   .eppie-chart path{cursor:pointer; outline:none}
@@ -531,9 +528,10 @@
   .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
   .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 
-  /* Table view (default) — the full 7-column data table, still built
-     from renderPieList/.eppie-listscroll (the old always-visible item
-     list), just with three more columns and no cell merging. */
+  /* The full 7-column data table (always visible, direct child of
+     .eppie-wrap) — still built from renderPieList/.eppie-listscroll (the
+     old always-visible item list), just with three more columns and no
+     cell merging. */
   .epsl-head{
     display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:8px;
     padding:10px 14px; border-bottom:1px solid var(--line); flex:0 0 auto;
@@ -611,17 +609,19 @@
   .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
 
   @media (max-width:1180px){
-    .eppie-chart-col{--eppie-h:480px}
+    .eppie-wrap{--eppie-h:480px}
+    .eppie-vizwrap{--eppie-h:420px}
   }
   @media (max-width:640px){
-    .eppie-chart-col{--eppie-h:420px; padding:12px 12px 8px}
+    .eppie-wrap{--eppie-h:420px}
+    .eppie-vizwrap{--eppie-h:340px; padding:12px 12px 8px}
     /* 7 columns don't fit a phone screen at readable size — rather than
        crush the text unreadably small, the table scrolls horizontally
        within its own box (min-width holds every column at a legible
        size); .epsl-head and .eppie-listscroll are both plain block
-       children of the overflow-x:auto .eppie-tablecol, so they scroll
-       in lockstep without any extra JS to keep them in sync. */
-    .eppie-tablecol{overflow-x:auto}
+       children of the overflow-x:auto .eppie-wrap, so they scroll in
+       lockstep without any extra JS to keep them in sync. */
+    .eppie-wrap{overflow-x:auto}
     .epsl-head,.eppie-listscroll{min-width:640px}
     .epsl-head{padding-left:12px; padding-right:12px}
     .eppie-listscroll{padding:0 12px}
@@ -630,14 +630,14 @@
   }
 
   /* ============================================================
-     Export Plan — filter bar for the table/chart/buttons block
+     Export Plan — filter bar for the always-visible table
      ------------------------------------------------------------
      Reuses Project Report's .filters/.cb/.pop/.opt/.chips
-     components verbatim. Sits inside #epViewBlock, above
-     .eppie-wrap, so it shares that block's hidden-by-default state
-     — it still needs to opt out of the shared mobile rule that
-     makes any .filters sticky under the header (that rule assumes
-     it's the page's first section, which it isn't here).
+     components verbatim. Sits directly above .eppie-wrap, both
+     always on screen (unlike .eppie-vizwrap, which is collapsed by
+     default) — it still needs to opt out of the shared mobile rule
+     that makes any .filters sticky under the header (that rule
+     assumes it's the page's first section, which it isn't here).
      ============================================================ */
   #epCardFiltersSection{margin-top:0}
   @media (max-width:640px){
@@ -844,61 +844,57 @@
     <section class="kpis eppinned" id="epKpis">
       <div class="kpis" id="epKpiCards"></div>
       <button type="button" class="epToggleBtn" id="epToggleViewBtn" aria-expanded="false" aria-controls="epViewBlock">
-        <span>Table · Chart · Buttons</span><i aria-hidden="true">▾</i>
+        <span>Chart · Buttons</span><i aria-hidden="true">▾</i>
       </button>
     </section>
     <div class="rule kpiRule"></div>
 
+    <section class="filters" id="epCardFiltersSection">
+      <div class="head">
+        <div class="eyebrow">Filter this table</div>
+        <button class="btn ghost" id="epCardClearAll">Clear all</button>
+      </div>
+      <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
+        <span class="mfLabel">Filters</span>
+        <span class="badge" id="epCardMfCount" hidden>0</span>
+        <span class="mfCaret" aria-hidden="true">▾</span>
+      </button>
+      <div class="fpanel" id="epCardFpanel">
+        <div class="fgrid" id="epCardFgrid"></div>
+        <div class="chips" id="epCardChips"></div>
+      </div>
+    </section>
+
+    <section class="panel eppie-wrap">
+      <div class="epsl-head">
+        <span class="epsl-proj">Project</span>
+        <span class="epsl-pname">Project Name</span>
+        <span class="epsl-pn">P/N</span>
+        <span class="epsl-qty">Qty</span>
+        <span class="epsl-date">Ship Date</span>
+        <span class="epsl-val">Value in US$</span>
+        <span class="epsl-remarks">Remarks</span>
+      </div>
+      <div class="eppie-listscroll" id="epPieList"></div>
+    </section>
+
     <div id="epViewBlock" hidden>
-
-      <section class="filters" id="epCardFiltersSection">
-        <div class="head">
-          <div class="eyebrow">Filter this table</div>
-          <button class="btn ghost" id="epCardClearAll">Clear all</button>
-        </div>
-        <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
-          <span class="mfLabel">Filters</span>
-          <span class="badge" id="epCardMfCount" hidden>0</span>
-          <span class="mfCaret" aria-hidden="true">▾</span>
-        </button>
-        <div class="fpanel" id="epCardFpanel">
-          <div class="fgrid" id="epCardFgrid"></div>
-          <div class="chips" id="epCardChips"></div>
-        </div>
-      </section>
-
-      <section class="panel eppie-wrap">
-        <div class="eppie-chart-col">
-          <div class="eppie-chart-head">
-            <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
-              <button type="button" data-mode="pn" aria-pressed="true">P/N</button>
-              <button type="button" data-mode="project" aria-pressed="false">Project</button>
-            </div>
-            <div class="segmented eppie-viewtoggle" id="epPieViewToggle" role="group" aria-label="View as">
-              <button type="button" data-view="table" aria-pressed="true">Table</button>
-              <button type="button" data-view="chart" aria-pressed="false">Chart</button>
-              <button type="button" data-view="buttons" aria-pressed="false">Buttons</button>
-            </div>
+      <section class="panel eppie-vizwrap">
+        <div class="eppie-chart-head">
+          <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
+            <button type="button" data-mode="pn" aria-pressed="true">P/N</button>
+            <button type="button" data-mode="project" aria-pressed="false">Project</button>
           </div>
-          <div class="eppie-chartscroll">
-            <div class="eppie-tablecol" id="epPieTableView">
-              <div class="epsl-head">
-                <span class="epsl-proj">Project</span>
-                <span class="epsl-pname">Project Name</span>
-                <span class="epsl-pn">P/N</span>
-                <span class="epsl-qty">Qty</span>
-                <span class="epsl-date">Ship Date</span>
-                <span class="epsl-val">Value in US$</span>
-                <span class="epsl-remarks">Remarks</span>
-              </div>
-              <div class="eppie-listscroll" id="epPieList"></div>
-            </div>
-            <div class="eppie-chart" id="epPieChart" hidden></div>
-            <div class="eppie-buttons" id="epPieButtons" hidden></div>
+          <div class="segmented eppie-viewtoggle" id="epPieViewToggle" role="group" aria-label="View as">
+            <button type="button" data-view="chart" aria-pressed="true">Chart</button>
+            <button type="button" data-view="buttons" aria-pressed="false">Buttons</button>
           </div>
         </div>
+        <div class="eppie-chartscroll">
+          <div class="eppie-chart" id="epPieChart"></div>
+          <div class="eppie-buttons" id="epPieButtons" hidden></div>
+        </div>
       </section>
-
     </div>
 
     <div class="foot">Read-only view · Nothing is written back to the source file · All processing happens on this computer</div>
@@ -3109,7 +3105,7 @@ wirePieToggle();
 // other, so switching views never needs a re-render or loses pick state.
 function wirePieViewToggle(){
   var box = document.getElementById("epPieViewToggle");
-  var views = { table: document.getElementById("epPieTableView"), chart: document.getElementById("epPieChart"), buttons: document.getElementById("epPieButtons") };
+  var views = { chart: document.getElementById("epPieChart"), buttons: document.getElementById("epPieButtons") };
   box.querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){
       if (b.getAttribute("aria-pressed") === "true") return;
@@ -3378,10 +3374,12 @@ window.addEventListener("drop", function(e){
   if (f) epHandleFile(f);
 }, true);
 
-// The Table/Chart/Buttons block (and its filter bar) is collapsed by
-// default — a click on this button in the KPI row reveals it, right next
-// to the KPI cards it summarizes. render() keeps populating it even while
-// hidden, so it's ready to show the instant it's revealed.
+// Only the pie/buttons visualization (with its P/N↔Project and Chart↔
+// Buttons toggles) is collapsed by default — the filter bar and the full
+// table are always visible. A click on this button in the KPI row reveals
+// the visualization, right next to the KPI cards it summarizes. render()
+// keeps populating it even while hidden, so it's ready to show the
+// instant it's revealed.
 var epToggleViewBtn = document.getElementById("epToggleViewBtn");
 var epViewBlock = document.getElementById("epViewBlock");
 epToggleViewBtn.addEventListener("click", function(){
