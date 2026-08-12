@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Project Report — Aitech</title>
+<meta name="description" content="Read-only Project Report and Export Plan dashboards. Drop in a daily export file; everything is processed on-device.">
+<meta name="theme-color" content="#12161C">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aitech Report">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
   :root{
     --ink:#12161C;
@@ -67,7 +77,18 @@
   .rule{height:1px; background:var(--gold); opacity:.55}
 
   /* ---------- shell ---------- */
-  .app{max-width:1560px; margin:0 auto; padding:0 28px 72px}
+  /* Safe-area insets matter here even in an ordinary Safari tab (a
+     landscape iPhone has the notch cutting into the side insets), and
+     matter more once installed to the home screen (display:standalone
+     hides Safari's own chrome, so nothing else pads the status-bar /
+     Dynamic Island area or the home-indicator strip for us). */
+  .app{
+    max-width:1560px; margin:0 auto;
+    padding:0 28px 72px;
+    padding-left:max(28px, env(safe-area-inset-left));
+    padding-right:max(28px, env(safe-area-inset-right));
+    padding-bottom:calc(72px + env(safe-area-inset-bottom));
+  }
 
   header.top{
     position:sticky; top:0; z-index:60;
@@ -75,6 +96,7 @@
     backdrop-filter:saturate(140%) blur(8px);
     border-bottom:1px solid var(--line);
     margin:0 -28px 0; padding:14px 28px;
+    padding-top:calc(14px + env(safe-area-inset-top));
     display:flex; align-items:center; gap:20px; flex-wrap:wrap;
   }
   .brand{display:flex; flex-direction:column; align-items:flex-start; gap:4px; margin-right:auto}
@@ -216,8 +238,16 @@
   }
 
   @media (max-width:640px){
-    .app{padding:0 12px 40px}
-    header.top{margin:0 -12px; padding:10px 12px; gap:9px 10px}
+    .app{
+      padding:0 12px 40px;
+      padding-left:max(12px, env(safe-area-inset-left));
+      padding-right:max(12px, env(safe-area-inset-right));
+      padding-bottom:calc(40px + env(safe-area-inset-bottom));
+    }
+    header.top{
+      margin:0 -12px; padding:10px 12px; gap:9px 10px;
+      padding-top:calc(10px + env(safe-area-inset-top));
+    }
     .brand{margin-right:0}
     .brand b{font-size:15px}
     .brand span{display:none}
@@ -274,7 +304,9 @@
     .filters.mExpanded .fpanel{
       display:block; position:absolute; left:0; right:0; top:100%; margin-top:6px;
       background:var(--surface); border:1px solid var(--line-strong); border-radius:10px;
-      box-shadow:0 12px 28px rgba(18,22,28,.16); max-height:calc(100vh - var(--headerH, 56px) - 90px);
+      box-shadow:0 12px 28px rgba(18,22,28,.16);
+      max-height:calc(100vh - var(--headerH, 56px) - 90px);
+      max-height:calc(100dvh - var(--headerH, 56px) - 90px - env(safe-area-inset-bottom));
       overflow-y:auto;
     }
     .fgrid{grid-template-columns:1fr; gap:10px; padding:12px}
@@ -297,7 +329,7 @@
     .folderbox{flex-wrap:wrap; gap:12px; padding:16px}
     .folderbox .fb-main{flex-basis:100%; order:2; min-width:0}
     .folderbox .btn.primary{order:3; width:100%}
-    #toast{top:64px; width:94vw}
+    #toast{top:calc(64px + env(safe-area-inset-top)); width:94vw}
   }
 
   .empty{padding:52px 16px; text-align:center; color:var(--faint); font-size:13px}
@@ -376,7 +408,7 @@
   .pill.no{background:var(--slate-tint); color:#4E5B6B}
   .pill.odd{background:#F6E4E7; color:var(--rose)}
 
-  #toast{position:fixed; z-index:200; top:78px; left:50%; transform:translateX(-50%); width:min(560px,92vw);
+  #toast{position:fixed; z-index:200; top:calc(78px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); width:min(560px,92vw);
     background:var(--surface); border:1px solid var(--line-strong); border-radius:10px;
     box-shadow:0 12px 40px rgba(18,22,28,.18); padding:12px; display:flex; gap:10px; align-items:flex-start}
   #toast .err{flex:1; margin-top:0}
@@ -412,7 +444,10 @@
      Report's, so its sticky filter bar tracks a separate CSS variable
      (--epHeaderH) instead of the shared --headerH. */
   #page-export .filters{top:var(--epHeaderH, 56px)}
-  #page-export .filters.mExpanded .fpanel{max-height:calc(100vh - var(--epHeaderH, 56px) - 90px)}
+  #page-export .filters.mExpanded .fpanel{
+    max-height:calc(100vh - var(--epHeaderH, 56px) - 90px);
+    max-height:calc(100dvh - var(--epHeaderH, 56px) - 90px - env(safe-area-inset-bottom));
+  }
 
   /* ============================================================
      Export Plan — grouped line-item cards
@@ -3636,6 +3671,18 @@ function epBootstrap(){
 epBootstrap();
 
 })();
+</script>
+
+<script>
+// Registers the app-shell service worker so the report installs on a
+// phone's home screen and still opens (fully functional — all processing
+// is local to the browser) with no connection. Guarded for file:// use,
+// since service workers only run in a secure (https/localhost) context.
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js").catch(function () {});
+  });
+}
 </script>
 </body>
 </html>
