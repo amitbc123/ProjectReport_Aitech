@@ -902,6 +902,64 @@ Two follow-ups to §5.8's highlight fix, both quick:
   content to size itself from and can't be trusted to render at any
   particular height across browsers/versions.
 
+### 5.10 Ninth round: a Table view (default), Project Report as the fixed startup page, and the frame "cut" bug's real cause
+
+Three unrelated requests addressed together:
+
+- **A third view — Table — joins Chart and Buttons, and is now the
+  default.** `renderPieTable(slices, recs, mode)` draws one horizontal bar
+  per slice (X = the slice's summed money value via the existing
+  `sliceMoneyTotal`, Y = the P/N-or-Project rows themselves — whichever the
+  mode toggle has selected), sorted largest value first, using the same
+  `--frame-color`-driven `color-mix()` styling as the list's frames and the
+  Buttons view. `#epPieViewToggle` gained a third button
+  (`data-view="table"`, listed first, `aria-pressed="true"` by default);
+  `wirePieViewToggle` was generalized from a two-way `if` to a
+  `{table,chart,buttons}` map so a third view didn't need special-casing.
+  All three views are always rendered (`renderPie()` now also calls
+  `renderPieTable`), same "never re-render on switch" approach as
+  Chart/Buttons already used. Picking a bar calls the same `pieTogglePick`
+  everything else uses, and `pieSetPickedClass` now also toggles `.picked`
+  on the matching `.eppt-row`, so a pick made from any of the three views
+  (or the list) shows as picked in all of them.
+- **Project Report is now the page shown on every fresh load, full stop.**
+  The router used to read `localStorage["aitech.activePage"]` and reopen
+  whichever page was last active — a nice-to-have from the original build,
+  not something that was ever explicitly requested — which meant a
+  browsing session spent on Export Plan would silently make Export Plan
+  the next "default" page too. That localStorage read (and the write that
+  fed it) is gone; `show("report")` is now unconditional on load. Switching
+  pages mid-session still works exactly as before, it just no longer
+  persists across a reload.
+- **The grouped list's "cut" frame, root-caused.** In both the hover
+  (`.grouphover`) and picked (`.hl`) states, the group's outline visibly
+  broke into short dashes, only ever visible in the 8px gutters between
+  the Project/P·N/Qty/Value columns. Cause: `.epsl-frame` is a real
+  `border`, sitting flush with the row's own box edges — the *exact same*
+  pixels a `.epsl-cell`'s opaque `.hl`/`.grouphover` background fill
+  covers, since a cell (painted after the frame, i.e. on top of it in DOM/
+  paint order) is exactly as tall as its grid row. The border was only
+  ever visible where no cell painted over it — the column gutters — which
+  is what read as a "cut" through an otherwise continuous frame. (The idle
+  state looked fine only because an idle cell has no fill at all, so
+  there's nothing to paint over the border in the first place.) Fixed by
+  drawing the outline as an outward `box-shadow` ring
+  (`box-shadow:0 0 0 1.5px …` idle/hover, `0 0 0 3px var(--ink)` picked,
+  stacked with the existing drop shadow as a second comma-separated value)
+  instead of a `border` — a box-shadow spreads *outside* the frame's own
+  box, into the blank `.epsl-gap` strip between groups (or the list's own
+  side padding, for the left/right edges), territory no cell ever paints
+  into, so the ring reads as one unbroken line regardless of which cells
+  above it happen to be filled. Verified at 3x device-scale against both a
+  hovered and a clicked multi-row group, and against the very first group
+  in the list (no gap above it to spread into) — no clipping. As a related
+  but separate cleanup, the per-row `border-bottom` on every `.epsl-cell`
+  (a leftover from before groups had their own visible frame) was removed
+  — it added a divider line through the *middle* of a multi-row group,
+  undermining the "one visual block" effect the frame exists to create;
+  the frame's own outline plus the `.epsl-gap` spacer between groups is
+  the only separation this list needs.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
