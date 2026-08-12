@@ -415,113 +415,134 @@
   #page-export .filters.mExpanded .fpanel{max-height:calc(100vh - var(--epHeaderH, 56px) - 90px)}
 
   /* ============================================================
-     Export Plan — grouped line-item cards
+     Export Plan — KPI row pinned under the header, with the
+     Table/Chart/Buttons reveal button riding along in the same row
      ------------------------------------------------------------
-     Each card is one export-plan row. A row that lists several
-     P/N + Qty pairs (paired by matching line breaks in the two
-     source cells) shows them nested underneath — distinguishable,
-     but never exploded into unrelated top-level rows.
-     ============================================================ */
-  .eplist{padding:10px 16px 6px}
-  .epcard{
-    border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:8px;
-    background:var(--surface); transition:border-color .12s; cursor:pointer;
-  }
-  .epcard:hover{border-color:var(--line-strong)}
-  .epcard.mismatch{border-left:3px solid var(--gold)}
-  .epc-head{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap}
-  .epc-proj{display:flex; flex-direction:column; gap:2px; min-width:0; flex:1}
-  .epc-no{font-size:12.5px; color:var(--ink-2)}
-  .epc-name{font-size:13.5px; color:var(--ink); font-weight:500}
-  .epc-inline{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:12.5px; margin-top:1px}
-  .epc-inline .epi-pn{color:var(--ink-2)}
-  .epc-right{display:flex; align-items:center; gap:16px; flex:0 0 auto}
-  .epc-date{color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums; white-space:nowrap}
-  .epc-value{font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap}
-  .epc-value.neg{color:var(--rose)}
-  .epitems{margin:8px 0 0; border-top:1px dashed var(--line); padding-top:7px; display:flex; flex-direction:column; gap:3px}
-  .epitem{display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px; padding:2px 0 2px 14px; position:relative}
-  .epitem::before{content:""; position:absolute; left:2px; top:50%; width:6px; height:6px; margin-top:-3px; border-radius:50%; background:var(--line-strong)}
-  .epitem .epi-pn{color:var(--ink-2)}
-  .epitem .epi-qty{color:var(--ink); font-variant-numeric:tabular-nums; font-weight:500}
-  .epitem.bad .epi-qty{color:var(--rose)}
-  .epmeta{display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:8px; align-items:center}
-  .epchip{background:var(--slate-tint); color:#4E5B6B; border-radius:20px; padding:2px 9px; font-size:11px; font-weight:500}
-  .epc-remarks,.epc-tech,.epc-notes{color:var(--muted); font-size:12px; line-height:1.5; margin-top:4px}
-  .epc-remarks b,.epc-tech b,.epc-notes b{color:var(--ink-2); font-weight:600}
-
-  @media (max-width:640px){
-    .eplist{padding:8px 10px 4px}
-    .epcard{padding:9px 10px}
-    .epc-head{gap:6px}
-    .epc-right{gap:10px; flex-basis:100%; justify-content:space-between; order:2}
-    .epc-proj{flex-basis:100%; order:1}
-    .epc-value{font-size:13px}
-  }
-
-  /* ============================================================
-     Export Plan — KPI row pinned under the header
-     ------------------------------------------------------------
-     There are no filters on this page (the sheet has none), so the
-     KPI band is the top-most content row and stays stuck there on
-     scroll, directly under the sticky header.
+     The KPI band is the top-most content row and stays stuck there
+     on scroll, directly under the sticky header. #epKpis is now the
+     flex *bar*; the KPI cards themselves render into the nested
+     #epKpiCards (still plain ".kpis", so it keeps every one of that
+     class's existing responsive rules — Project Report's own KPI
+     row is unaffected, it has no such wrapper).
      ============================================================ */
   #page-export .kpis.eppinned{
     position:sticky; z-index:50; top:var(--epHeaderH, 56px);
     background:rgba(244,245,247,.92); backdrop-filter:saturate(140%) blur(8px);
     margin:0; padding:18px 0 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:18px;
+  }
+  #page-export .kpis.eppinned #epKpiCards{ flex:1 1 auto; min-width:0; margin-top:0; }
+  .epToggleBtn{
+    display:flex; align-items:center; gap:8px; flex:0 0 auto;
+    border:1px solid var(--gold); background:var(--gold-tint); color:#5F4708;
+    border-radius:999px; padding:10px 18px; font-weight:600; font-size:12.5px;
+    cursor:pointer; white-space:nowrap; box-shadow:var(--shadow);
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  .epToggleBtn:hover{background:#F3E7C4}
+  .epToggleBtn i{font-style:normal; font-size:9px; transition:transform .15s}
+  .epToggleBtn[aria-expanded="true"]{background:var(--ink); border-color:var(--ink); color:#fff}
+  .epToggleBtn[aria-expanded="true"] i{transform:rotate(180deg)}
+  @media (max-width:900px){
+    #page-export .kpis.eppinned{flex-direction:column; align-items:stretch; gap:10px}
+    .epToggleBtn{justify-content:center; width:100%}
   }
   @media (max-width:640px){
     #page-export .kpis.eppinned{padding:10px 2px 8px}
   }
 
   /* ============================================================
-     Export Plan — pie breakdown + matching-height line-item list
+     Export Plan — the collapsible Table/Chart/Buttons block
      ------------------------------------------------------------
-     Two panes, equal height, flexbox (not CSS grid) so the split
-     between them is user-resizable: a Project/P·N/Qty/Value list
-     (in the sheet's own row order — see renderPieList), a drag
-     handle, then a P/N-or-Project quantity pie with a toggle above
-     it. Default split is ~60/40 list/chart, dragged via
-     `.eppie-resizer` (wireEppieResizer) which pins the list pane
-     to a px width; the chart pane just takes what's left.
-     Slice labels are NOT shown by default — only the slice being
-     hovered or picked shows its leader line + name, so the donut
-     reads clean at rest (every `.epslice-label` starts
-     `opacity:0`, toggled by the same hover/pick handlers that
-     already drive the grow/pick effects — see pieSetLabelVisible).
-     Hover *previews* a slice (grows it, shows its qty/share/value
-     and its label) without touching the list; a click *picks* it,
-     driving the list highlight — and the reverse also works:
-     clicking a list row/group picks the matching slice on the pie.
-     Every group (including a group of one) is visibly framed in its
-     own project color (`--frame-color`, set inline per group and
-     consumed by `.epsl-frame`/`.epsl-cell`), and hovering or
-     clicking anywhere in it marks the whole group, never a single
-     row inside it. The list has no wrapper div per row —
-     `.eppie-listscroll` is itself one CSS grid and every cell
-     carries an explicit grid-row, so the Project/Value cell can
-     span multiple rows for a merged group — a true merged cell,
-     not a repeated number.
+     Hidden by default (#epViewBlock[hidden]), revealed by the
+     .epToggleBtn above. Holds the filter bar (moved here — the
+     bottom card list it used to sit above is gone, see the JS) and
+     the eppie-wrap panel with its P/N↔Project and Table/Chart/
+     Buttons toggles.
+
+     Just one column now, full panel width. There used to be a
+     second, always-visible "item list" pane (Project/P·N/Qty/Value)
+     living beside this column, resizable via a drag handle. That
+     list *is* now the Table view (renderPieList, expanded to 7
+     columns — Project, Project Name, P/N, Qty, Ship Date, Value in
+     US$, Remarks) and it renders into the width the second pane and
+     its resizer used to occupy. Chart and Buttons fill the same
+     full-width box when picked — see wirePieViewToggle.
+
+     A project can legitimately span several *different* source
+     rows (not just one row's several P/N lines), so — unlike the
+     old "merge the Value cell" behavior — every row keeps its own
+     Ship Date and Value; a thin `.epsl-sep` line is drawn between
+     the rows of a multi-row group instead, since those figures
+     usually differ within a group. The group still reads as one
+     colored block via `.epsl-frame`, and every cell keeps the same
+     data-group/data-project/data-pn wiring the pie/buttons pick and
+     hover interactions already depend on (see the JS).
+
+     The filter bar drives state.filters/state.filtered, which now
+     feeds the KPI band, the Table view, the Chart and the Buttons —
+     all four react to whatever's currently filtered.
      ============================================================ */
-  .eppie-wrap{margin-top:22px}
-  .eppie-grid{
-    --eppie-h:400px;
-    display:flex; align-items:stretch;
-  }
-  .eppie-list-col{
+  .eppie-wrap{margin-top:0}
+  .eppie-chart-col{
+    --eppie-h:560px;
     display:flex; flex-direction:column; height:var(--eppie-h);
-    flex:0 0 auto; width:60%; min-width:220px; max-width:78%;
+    padding:14px 20px 10px;
   }
+  .eppie-chart-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    flex:0 0 auto; margin-bottom:12px; flex-wrap:wrap;
+  }
+  .eppie-toggle,.eppie-viewtoggle{flex:0 0 auto}
+  /* Chart view: fills whatever box is left in the column after the head
+     row — both eppie-chart and its svg are sized 100%/100% of that box
+     (not a fixed max-width), and the SVG's own viewBox aspect ratio +
+     default preserveAspectRatio="xMidYMid meet" does the "fit without
+     distorting" part, so the donut is always as big as the available
+     space allows. Buttons/Table views: a scrollable grid/list in the
+     same box, shown instead of (never alongside) the chart — see
+     wirePieViewToggle. */
+  .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
+  .eppie-tablecol{width:100%; height:100%; display:flex; flex-direction:column; min-height:0}
+  .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
+  .eppie-chart svg{display:block; width:100%; height:100%}
+  .eppie-chart path{cursor:pointer; outline:none}
+  .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
+  .eppie-buttons{
+    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
+    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+    align-content:start; padding:2px;
+  }
+  .eppie-btn{
+    display:flex; align-items:center; gap:6px; min-width:0;
+    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; padding:7px 9px; font-size:11.5px; color:var(--ink-2);
+    cursor:pointer; text-align:left; font-family:inherit;
+    transition:background .12s, border-color .12s, box-shadow .12s;
+  }
+  .eppie-btn:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
+  .eppie-btn.picked{
+    border-width:3px; border-color:var(--ink);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+    box-shadow:0 2px 8px rgba(18,22,28,.22);
+    font-weight:700; color:var(--ink);
+  }
+  .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
+  .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+  /* Table view (default) — the full 7-column data table, still built
+     from renderPieList/.eppie-listscroll (the old always-visible item
+     list), just with three more columns and no cell merging. */
   .epsl-head{
-    display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:8px;
-    padding:10px 14px; border-bottom:1px solid var(--line);
+    display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:8px;
+    padding:10px 14px; border-bottom:1px solid var(--line); flex:0 0 auto;
     font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint);
   }
-  .epsl-head span:nth-child(n+3){text-align:right}
+  .epsl-head .epsl-qty,.epsl-head .epsl-val{text-align:right}
   .eppie-listscroll{
     flex:1; overflow-y:auto; scrollbar-width:thin; position:relative;
-    display:grid; grid-template-columns:1.1fr 1.3fr .7fr .9fr; gap:0 8px;
+    display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:0 8px;
     padding:0 14px; align-content:start;
   }
   .eppie-listscroll .empty{grid-column:1/-1}
@@ -559,12 +580,6 @@
     box-shadow:0 0 0 3px var(--ink), 0 2px 8px rgba(18,22,28,.22);
     background:color-mix(in srgb, var(--frame-color) 32%, white);
   }
-  /* No border-bottom here on purpose: a per-row divider used to be drawn
-     on every cell, including the internal rows of a multi-row group,
-     which visually cut the group's own .epsl-frame into segments instead
-     of it reading as one unified block. The frame's own border plus the
-     .epsl-gap spacer between groups is all the separation this list
-     needs. */
   .epsl-cell{
     display:flex; align-items:center; min-width:0; cursor:pointer;
     padding:7px 0; font-size:12.5px;
@@ -576,135 +591,66 @@
      sized grid item, not a grid row-gap, since a uniform row-gap would
      also open a gap *within* a group, between its own member rows. */
   .epsl-gap{display:block; height:7px; grid-column:1/-1}
+  /* A thin line *within* a group, between two of its member rows — a
+     project can span several source records with their own date/value
+     each, so unlike the old merged-cell behavior every row shows its
+     own figures, and this is what still marks "these rows are one
+     group" between them. Same explicit-sized-grid-item technique as
+     .epsl-gap, tinted with the group's own color; pointer-events:none
+     since it's a pure visual divider, never a click/hover target. */
+  .epsl-sep{display:block; height:1px; grid-column:1/-1; pointer-events:none; background:color-mix(in srgb, var(--frame-color, var(--line-strong)) 40%, white)}
   .epsl-proj{grid-column:1}
-  .epsl-pn{grid-column:2}
-  .epsl-qty{grid-column:3; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
-  .epsl-val{grid-column:4; justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
+  .epsl-pname{grid-column:2}
+  .epsl-pn{grid-column:3}
+  .epsl-qty{grid-column:4; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
+  .epsl-date{grid-column:5; font-variant-numeric:tabular-nums; color:var(--ink-2); white-space:nowrap}
+  .epsl-val{grid-column:6; justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
   .epsl-val.neg{color:var(--rose)}
-  .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
-  .epsl-proj,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
+  .epsl-remarks{grid-column:7; color:var(--ink-2); white-space:normal; overflow-wrap:anywhere; line-height:1.35}
+  .epsl-proj,.epsl-pname,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
   .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
-  .eppie-resizer{
-    flex:0 0 13px; position:relative; cursor:col-resize; height:var(--eppie-h);
-  }
-  .eppie-resizer::after{
-    content:""; position:absolute; top:6px; bottom:6px; left:50%;
-    width:1px; background:var(--line-strong); transform:translateX(-50%);
-    transition:background .12s, width .12s;
-  }
-  .eppie-resizer:hover::after, .eppie-resizer.dragging::after{
-    background:var(--gold); width:3px; border-radius:2px;
-  }
-  .eppie-chart-col{
-    display:flex; flex-direction:column; height:var(--eppie-h);
-    flex:1 1 auto; min-width:180px;
-    padding:14px 20px 10px;
-  }
-  .eppie-chart-head{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    flex:0 0 auto; margin-bottom:12px; flex-wrap:wrap;
-  }
-  .eppie-toggle,.eppie-viewtoggle{flex:0 0 auto}
-  /* Chart view: fills whatever box is left in the column after the head
-     row — both eppie-chart and its svg are sized 100%/100% of that box
-     (not a fixed max-width), and the SVG's own viewBox aspect ratio +
-     default preserveAspectRatio="xMidYMid meet" does the "fit without
-     distorting" part, so the donut is always as big as the available
-     space allows. Buttons view: a scrollable grid in the same box,
-     shown instead of (never alongside) the chart — see wirePieViewToggle. */
-  .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
-  .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
-  .eppie-chart svg{display:block; width:100%; height:100%}
-  .eppie-chart path{cursor:pointer; outline:none}
-  .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
-  .eppie-buttons{
-    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
-    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
-    align-content:start; padding:2px;
-  }
-  .eppie-btn{
-    display:flex; align-items:center; gap:6px; min-width:0;
-    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
-    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
-    border-radius:6px; padding:7px 9px; font-size:11.5px; color:var(--ink-2);
-    cursor:pointer; text-align:left; font-family:inherit;
-    transition:background .12s, border-color .12s, box-shadow .12s;
-  }
-  .eppie-btn:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
-  .eppie-btn.picked{
-    border-width:3px; border-color:var(--ink);
-    background:color-mix(in srgb, var(--frame-color) 32%, white);
-    box-shadow:0 2px 8px rgba(18,22,28,.22);
-    font-weight:700; color:var(--ink);
-  }
-  .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
-  .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-
-  /* Table view (default): one horizontal bar per P/N or Project (whichever
-     the P/N ↔ Project toggle currently selects), bar length encoding its
-     summed money value — same axis convention as a normal bar chart, X
-     = money, Y = the category rows. Rows sorted by value, largest first,
-     like the buttons/frame the color scheme reused from. */
-  .eppie-table{
-    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
-    display:flex; flex-direction:column; gap:6px; padding:2px;
-  }
-  .eppt-row{
-    display:grid; grid-template-columns:minmax(70px,1fr) 2fr auto; align-items:center; gap:10px;
-    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
-    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
-    border-radius:6px; padding:7px 10px; font-size:11.5px; color:var(--ink-2);
-    cursor:pointer; text-align:left; font-family:inherit; width:100%;
-    transition:background .12s, border-color .12s, box-shadow .12s;
-  }
-  .eppt-row:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
-  .eppt-row.picked{
-    border-width:3px; border-color:var(--ink);
-    background:color-mix(in srgb, var(--frame-color) 32%, white);
-    box-shadow:0 2px 8px rgba(18,22,28,.22);
-    font-weight:700; color:var(--ink);
-  }
-  .eppt-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .eppt-bartrack{height:10px; border-radius:4px; background:color-mix(in srgb, var(--line) 70%, white); overflow:hidden}
-  .eppt-bar{display:block; height:100%; border-radius:4px; background:var(--frame-color, var(--gold)); min-width:3px}
-  .eppt-bar.neg{background:var(--rose)}
-  .eppt-val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); text-align:right; min-width:64px}
-  .eppt-val.neg{color:var(--rose)}
-  @media (max-width:640px){
-    .eppt-row{grid-template-columns:minmax(56px,.8fr) 1.4fr auto; gap:7px; padding:6px 8px; font-size:11px}
-    .eppt-val{min-width:52px}
-  }
 
   @media (max-width:1180px){
-    .eppie-grid{--eppie-h:360px}
-  }
-  @media (max-width:900px){
-    .eppie-grid{flex-direction:column; --eppie-h:340px}
-    .eppie-list-col{flex-basis:auto !important; width:auto !important; max-width:none; border-right:0; border-bottom:1px solid var(--line)}
-    .eppie-resizer{display:none}
+    .eppie-chart-col{--eppie-h:480px}
   }
   @media (max-width:640px){
-    .eppie-grid{--eppie-h:300px}
+    .eppie-chart-col{--eppie-h:420px; padding:12px 12px 8px}
+    /* 7 columns don't fit a phone screen at readable size — rather than
+       crush the text unreadably small, the table scrolls horizontally
+       within its own box (min-width holds every column at a legible
+       size); .epsl-head and .eppie-listscroll are both plain block
+       children of the overflow-x:auto .eppie-tablecol, so they scroll
+       in lockstep without any extra JS to keep them in sync. */
+    .eppie-tablecol{overflow-x:auto}
+    .epsl-head,.eppie-listscroll{min-width:640px}
     .epsl-head{padding-left:12px; padding-right:12px}
     .eppie-listscroll{padding:0 12px}
-    .eppie-chart-col{padding:12px 12px 8px}
     .eppie-buttons{grid-template-columns:repeat(3,1fr)}
     .eppie-btn{font-size:11px; padding:6px 7px}
   }
 
   /* ============================================================
-     Export Plan — filter bar for the bottom (full) table only
+     Export Plan — filter bar for the table/chart/buttons block
      ------------------------------------------------------------
      Reuses Project Report's .filters/.cb/.pop/.opt/.chips
-     components verbatim, but this instance sits mid-page (above
-     the card list) rather than at the top, so it must opt out of
-     the shared mobile rule that makes any .filters sticky under
-     the header (that rule assumes it's the page's first section).
+     components verbatim. Sits inside #epViewBlock, above
+     .eppie-wrap, so it shares that block's hidden-by-default state
+     — it still needs to opt out of the shared mobile rule that
+     makes any .filters sticky under the header (that rule assumes
+     it's the page's first section, which it isn't here).
      ============================================================ */
-  #epCardFiltersSection{margin-top:22px}
+  #epCardFiltersSection{margin-top:0}
   @media (max-width:640px){
-    #epCardFiltersSection{
-      position:relative; top:auto; margin-top:16px;
+    /* #page-export .filters{top:var(--epHeaderH,56px)} (id+class, higher
+       specificity than a bare #epCardFiltersSection selector) would
+       otherwise still win the `top` property here even though
+       position:relative no longer means "sticky offset" — leaving the
+       section visually shifted down by --epHeaderH while the *next*
+       sibling (.eppie-wrap) lays out from its unshifted flow position,
+       so the two would visibly overlap. Matching that selector's own
+       #page-export prefix is what actually wins the tie. */
+    #page-export #epCardFiltersSection{
+      position:relative; top:auto; margin-top:0;
       border-top:1px solid var(--line); border-radius:10px;
     }
   }
@@ -895,18 +841,33 @@
 
   <main id="epDash" hidden>
 
-    <section class="kpis eppinned" id="epKpis"></section>
+    <section class="kpis eppinned" id="epKpis">
+      <div class="kpis" id="epKpiCards"></div>
+      <button type="button" class="epToggleBtn" id="epToggleViewBtn" aria-expanded="false" aria-controls="epViewBlock">
+        <span>Table · Chart · Buttons</span><i aria-hidden="true">▾</i>
+      </button>
+    </section>
     <div class="rule kpiRule"></div>
 
-    <section class="panel eppie-wrap">
-      <div class="eppie-grid">
-        <div class="eppie-list-col">
-          <div class="epsl-head">
-            <span>Project</span><span>P/N</span><span>Qty</span><span>Value in US$</span>
-          </div>
-          <div class="eppie-listscroll" id="epPieList"></div>
+    <div id="epViewBlock" hidden>
+
+      <section class="filters" id="epCardFiltersSection">
+        <div class="head">
+          <div class="eyebrow">Filter this table</div>
+          <button class="btn ghost" id="epCardClearAll">Clear all</button>
         </div>
-        <div class="eppie-resizer" id="epPieResizer" role="separator" aria-orientation="vertical" aria-label="Resize list/chart split" tabindex="0"></div>
+        <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
+          <span class="mfLabel">Filters</span>
+          <span class="badge" id="epCardMfCount" hidden>0</span>
+          <span class="mfCaret" aria-hidden="true">▾</span>
+        </button>
+        <div class="fpanel" id="epCardFpanel">
+          <div class="fgrid" id="epCardFgrid"></div>
+          <div class="chips" id="epCardChips"></div>
+        </div>
+      </section>
+
+      <section class="panel eppie-wrap">
         <div class="eppie-chart-col">
           <div class="eppie-chart-head">
             <div class="segmented eppie-toggle" id="epPieToggle" role="group" aria-label="Breakdown by">
@@ -920,42 +881,25 @@
             </div>
           </div>
           <div class="eppie-chartscroll">
-            <div class="eppie-table" id="epPieTable"></div>
+            <div class="eppie-tablecol" id="epPieTableView">
+              <div class="epsl-head">
+                <span class="epsl-proj">Project</span>
+                <span class="epsl-pname">Project Name</span>
+                <span class="epsl-pn">P/N</span>
+                <span class="epsl-qty">Qty</span>
+                <span class="epsl-date">Ship Date</span>
+                <span class="epsl-val">Value in US$</span>
+                <span class="epsl-remarks">Remarks</span>
+              </div>
+              <div class="eppie-listscroll" id="epPieList"></div>
+            </div>
             <div class="eppie-chart" id="epPieChart" hidden></div>
             <div class="eppie-buttons" id="epPieButtons" hidden></div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <div class="rule"></div>
-
-    <section class="filters" id="epCardFiltersSection">
-      <div class="head">
-        <div class="eyebrow">Filter this table</div>
-        <button class="btn ghost" id="epCardClearAll">Clear all</button>
-      </div>
-      <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
-        <span class="mfLabel">Filters</span>
-        <span class="badge" id="epCardMfCount" hidden>0</span>
-        <span class="mfCaret" aria-hidden="true">▾</span>
-      </button>
-      <div class="fpanel" id="epCardFpanel">
-        <div class="fgrid" id="epCardFgrid"></div>
-        <div class="chips" id="epCardChips"></div>
-      </div>
-    </section>
-
-    <section class="panel tablewrap">
-      <div class="tbar">
-        <div class="count" id="epRowCount" aria-live="polite"></div>
-        <div class="hint">Each card is one export line. P/Ns that share a line share its date and value.</div>
-      </div>
-      <div id="epList" class="eplist"></div>
-      <div id="epLoadMoreWrap" style="text-align:center;padding:6px 0 16px" hidden>
-        <button class="btn" id="epLoadMore">Show more</button>
-      </div>
-    </section>
+    </div>
 
     <div class="foot">Read-only view · Nothing is written back to the source file · All processing happens on this computer</div>
   </main>
@@ -2478,7 +2422,6 @@ var FALLBACK_DONE = ["priority","type","projectNo","projectName","pn","qty","shi
 var FIXED_SHEET_ORDER = ["done", "open issue with r&d", "old"];  // everything else ("JUNE 26", "JULY 26", …) sorts first, as "current"
 var BLANK = "(Blank)";
 var ROW_H_HINT = 34;
-var PAGE_SIZE = 150;
 var TODAY = (function(){ var d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); })();
 
 /* ============================================================
@@ -2664,14 +2607,13 @@ function parseExportWorkbook(u8){
 /* ============================================================
    4. State
    ------------------------------------------------------------
-   state.filters/state.filtered drive the bottom (full) table
-   only — the KPI band reports filtered-vs-total from the same
-   two, but the pie + item list above always read straight from
-   activeSheet().rows (see §6), independent of these filters.
+   state.filters/state.filtered drive the whole Table/Chart/
+   Buttons block (§6) — the KPI band, the table, the pie chart and
+   the buttons grid all report filtered-vs-total from the same two.
    ============================================================ */
 var state = {
   fileName:"", sheet:null, pieMode:"pn",
-  filters:{}, filtered:[], facets:{}, totals:null, visibleCount:PAGE_SIZE
+  filters:{}, filtered:[], facets:{}, totals:null
 };
 function activeSheet(){ return state.sheet; }
 
@@ -2723,14 +2665,41 @@ function recompute(){
       }
     }
   }
-  out.sort(function(a, b){
+  // Grouped by project (so renderPieList's "consecutive rows, same project"
+  // grouping/coloring always holds, even when a project's several records
+  // land far apart in the source sheet), each project's own rows sorted by
+  // ship date within the group, and the groups themselves ordered by
+  // their earliest ship date — nulls-dated groups/rows sort last, ties
+  // keep the project's first-appearance order (Array#sort is stable).
+  var order = [], groups = new Map();
+  out.forEach(function(r){
+    var k = r.projectNo || BLANK, g = groups.get(k);
+    if (!g){ g = []; groups.set(k, g); order.push(k); }
+    g.push(r);
+  });
+  function byShipDate(a, b){
     if (a.shipDate === null && b.shipDate === null) return 0;
     if (a.shipDate === null) return 1;
     if (b.shipDate === null) return -1;
     return a.shipDate - b.shipDate;
+  }
+  var groupMinDate = {};
+  order.forEach(function(k){
+    var list = groups.get(k);
+    list.sort(byShipDate);
+    groupMinDate[k] = list.length && list[0].shipDate !== null ? list[0].shipDate : null;
   });
+  order.sort(function(a, b){
+    var da = groupMinDate[a], db = groupMinDate[b];
+    if (da === null && db === null) return 0;
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  });
+  var sorted = [];
+  order.forEach(function(k){ sorted = sorted.concat(groups.get(k)); });
   state.facets = facets;
-  state.filtered = out;
+  state.filtered = sorted;
 }
 
 /* ============================================================
@@ -2754,7 +2723,7 @@ function renderKpis(){
     { lab:"Distinct P/N",   val:nfInt.format(f.pn.size), sub:"of " + nfInt.format(a.pn.size) + " in this sheet" },
     { lab:"Rows shown",     val:nfInt.format(f.n), sub:"of " + nfInt.format(a.n) + " rows in this sheet" }
   ];
-  document.getElementById("epKpis").innerHTML = cards.map(function(c){
+  document.getElementById("epKpiCards").innerHTML = cards.map(function(c){
     return '<div class="kpi"><div class="lab">'+c.lab+'</div>'+
            '<div class="val'+(c.neg?" neg":"")+'">'+esc(c.val)+'</div>'+
            '<div class="sub">'+esc(c.sub)+'</div></div>';
@@ -2888,7 +2857,7 @@ function pieShowTotal(){
 function pieShowSlice(sl){
   if (!pieState.centerVal) return;
   var pct = (sl.qty / pieState.total * 100).toFixed(1);
-  var moneyTotal = sliceMoneyTotal(activeSheet().rows, pieState.mode, sl);
+  var moneyTotal = sliceMoneyTotal(state.filtered, pieState.mode, sl);
   pieState.centerVal.textContent = nfInt.format(sl.qty);
   pieState.centerLab.textContent = pct + "% · " + money(moneyTotal);
   if (pieState.caption) pieState.caption.textContent = truncateLabel(sl.key, 30);
@@ -2913,9 +2882,6 @@ function pieSetPickedClass(idx, on){
   var btnHost = document.getElementById("epPieButtons");
   var btn = btnHost && btnHost.querySelector('.eppie-btn[data-idx="'+idx+'"]');
   if (btn) btn.classList.toggle("picked", on);
-  var tblHost = document.getElementById("epPieTable");
-  var row = tblHost && tblHost.querySelector('.eppt-row[data-idx="'+idx+'"]');
-  if (row) row.classList.toggle("picked", on);
 }
 function pieTogglePick(idx){
   if (idx < 0 || idx >= pieState.slices.length) return;
@@ -2994,27 +2960,32 @@ function flattenItems(recs){
   var out = [];
   recs.forEach(function(r){
     if (!r.items.length){
-      out.push({ project:r.projectNo, pn:"", qty:null, value:r.value });
+      out.push({ project:r.projectNo, projectName:r.projectName, pn:"", qty:null, shipDate:r.shipDate, value:r.value, remarks:r.remarks });
     } else {
-      r.items.forEach(function(it){ out.push({ project:r.projectNo, pn:it.pn, qty:it.qty, value:r.value }); });
+      r.items.forEach(function(it){
+        out.push({ project:r.projectNo, projectName:r.projectName, pn:it.pn, qty:it.qty, shipDate:r.shipDate, value:r.value, remarks:r.remarks });
+      });
     }
   });
   return out;
 }
-// Consecutive rows sharing a project (almost always the several P/Ns of one
-// source record — see EXPORT_PLAN_NOTES.md §4.2) get ONE shared Value cell,
-// spanning their grid rows, instead of repeating the same figure on each —
-// a real merged cell (explicit grid-row per cell, see the CSS), not a
-// rowspan-look-alike. Every group — including a group of one — gets a
-// visible frame (`.epsl-frame`) tinted in its own project color via the
-// `--frame-color` custom property (set inline here, consumed by the CSS
-// for the frame itself and for its cells' hover/hl backgrounds), so the
-// whole group reads as one colored block, not just a small swatch dot.
+// Consecutive rows sharing a project get one visible frame (`.epsl-frame`),
+// tinted in its own project color via the `--frame-color` custom property
+// (set inline here, consumed by the CSS for the frame itself and for its
+// cells' hover/hl backgrounds), so the whole group reads as one colored
+// block — including a group of one, which just doesn't need a divider.
+// Unlike an early version of this table, nothing is merged across a
+// group's rows: a project can span several distinct source records, each
+// with its own ship date and value, so every row always shows its own
+// figures — a thin `.epsl-sep` line is drawn between a group's member
+// rows instead, as the only thing marking "these still belong together".
 function renderPieList(recs){
   var host = document.getElementById("epPieList");
   var items = flattenItems(recs);
   if (!items.length){
-    host.innerHTML = '<div class="empty"><b>No rows</b>No data in this sheet.</div>';
+    host.innerHTML = anyFilter()
+      ? '<div class="empty"><b>No rows match</b>Remove a filter, or clear them all, to see rows again.</div>'
+      : '<div class="empty"><b>No rows</b>No data in this sheet.</div>';
     return;
   }
   var colorMap = buildProjectColorMap(recs);
@@ -3022,26 +2993,28 @@ function renderPieList(recs){
   while (i < items.length){
     var j = i;
     while (j + 1 < items.length && items[j+1].project === items[i].project) j++;
-    var groupLen = j - i + 1;
+    var groupLen = j - i + 1, span = groupLen * 2 - 1;
     var groupPns = items.slice(i, j + 1).map(function(it){ return it.pn; }).join("|");
     var color = colorMap.get(items[i].project) || "var(--slate)";
     var colorStyle = "--frame-color:" + color;
-    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'" style="grid-row:'+gridRow+' / span '+groupLen+'; grid-column:1/-1; '+colorStyle+'"></span>');
+    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'" style="grid-row:'+gridRow+' / span '+span+'; grid-column:1/-1; '+colorStyle+'"></span>');
     for (var k = i; k <= j; k++){
-      var it = items[k], r = gridRow + (k - i);
+      var it = items[k], r = gridRow + (k - i) * 2;
+      var attrs = 'style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'"';
       out.push(
-        '<span class="epsl-cell epsl-proj mono" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">' +
+        '<span class="epsl-cell epsl-proj mono" '+attrs+'>' +
           '<i class="epsl-swatch" style="background:'+color+'"></i>' + esc(it.project || "—") +
         '</span>' +
-        '<span class="epsl-cell epsl-pn mono" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+esc(it.pn || "—")+'</span>' +
-        '<span class="epsl-cell epsl-qty" style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>'
+        '<span class="epsl-cell epsl-pname" '+attrs+'>'+esc(it.projectName || "—")+'</span>' +
+        '<span class="epsl-cell epsl-pn mono" '+attrs+'>'+esc(it.pn || "—")+'</span>' +
+        '<span class="epsl-cell epsl-qty" '+attrs+'>'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>' +
+        '<span class="epsl-cell epsl-date" '+attrs+'>'+(it.shipDate==null?"—":fmtDate(it.shipDate))+'</span>' +
+        '<span class="epsl-cell epsl-val'+(it.value<0?" neg":"")+'" '+attrs+'>'+money(it.value)+'</span>' +
+        '<span class="epsl-cell epsl-remarks" '+attrs+'>'+esc(it.remarks || "")+'</span>'
       );
+      if (k < j) out.push('<span class="epsl-sep" style="grid-row:'+(r+1)+'; '+colorStyle+'"></span>');
     }
-    out.push(
-      '<span class="epsl-cell epsl-val'+(items[i].value<0?" neg":"")+(groupLen>1?" merged":"")+'" style="grid-row:'+gridRow+' / span '+groupLen+'; '+colorStyle+'" '+
-      'data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'">'+money(items[i].value)+'</span>'
-    );
-    gridRow += groupLen;
+    gridRow += span;
     groupIdx++;
     i = j + 1;
     if (i < items.length){
@@ -3107,48 +3080,17 @@ function renderPieButtons(slices){
     b.addEventListener("click", function(){ pieTogglePick(+b.dataset.idx); });
   });
 }
-// Default view: one horizontal bar per slice (X = summed money value, Y =
-// the P/N or Project rows themselves — whichever the mode toggle has
-// selected), sorted largest value first. Reuses sliceMoneyTotal (already
-// built for the donut's center label) so a slice's bar and its chart/
-// buttons-view money figure always agree. Rows keep the slice's own
-// `idx` (into the unsorted `slices` array, same indexing pieState and
-// pieTogglePick use) as data-idx, since the table's own display order is
-// by value, not the slices array's by-qty order.
-function renderPieTable(slices, recs, mode){
-  var host = document.getElementById("epPieTable");
-  if (!slices.length){
-    host.innerHTML = '<div class="empty"><b>Nothing to show</b>No quantities in this sheet.</div>';
-    return;
-  }
-  var rows = slices.map(function(sl, idx){
-    return { idx:idx, key:sl.key, color:sl.color, value:sliceMoneyTotal(recs, mode, sl) };
-  });
-  rows.sort(function(a, b){ return b.value - a.value; });
-  var max = rows.reduce(function(m, r){ return Math.max(m, Math.abs(r.value)); }, 0) || 1;
-  host.innerHTML = rows.map(function(r){
-    var neg = r.value < 0;
-    var pct = Math.max(2, Math.abs(r.value) / max * 100);
-    return '<button type="button" class="eppt-row" data-idx="'+r.idx+'" style="--frame-color:'+r.color+'" title="'+esc(r.key)+'">' +
-      '<span class="eppt-label">'+esc(r.key)+'</span>' +
-      '<span class="eppt-bartrack"><span class="eppt-bar'+(neg?" neg":"")+'" style="width:'+pct+'%"></span></span>' +
-      '<span class="eppt-val'+(neg?" neg":"")+'">'+money(r.value)+'</span>' +
-    '</button>';
-  }).join("");
-  host.querySelectorAll(".eppt-row").forEach(function(b){
-    b.addEventListener("click", function(){ pieTogglePick(+b.dataset.idx); });
-  });
-}
 function renderPie(){
-  // Always the whole sheet, in its own row order — not state.filtered
-  // (that's the bottom table's filtered/date-sorted view, see §8).
-  var recs = activeSheet().rows;
+  // The currently filtered set (state.filtered, ship-date sorted — see
+  // recompute) — the table, chart and buttons all react to the same
+  // filters as the KPI band above them now that the filter bar lives in
+  // this block instead of driving a separate bottom table.
+  var recs = state.filtered;
   renderPieList(recs);
   var slices = pieSlices(recs, state.pieMode);
   var total = slices.reduce(function(s, x){ return s + Math.max(0, x.qty); }, 0);
   renderPieChart(slices, total, state.pieMode);
   renderPieButtons(slices);
-  renderPieTable(slices, recs, state.pieMode);
 }
 function wirePieToggle(){
   var box = document.getElementById("epPieToggle");
@@ -3167,7 +3109,7 @@ wirePieToggle();
 // other, so switching views never needs a re-render or loses pick state.
 function wirePieViewToggle(){
   var box = document.getElementById("epPieViewToggle");
-  var views = { table: document.getElementById("epPieTable"), chart: document.getElementById("epPieChart"), buttons: document.getElementById("epPieButtons") };
+  var views = { table: document.getElementById("epPieTableView"), chart: document.getElementById("epPieChart"), buttons: document.getElementById("epPieButtons") };
   box.querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){
       if (b.getAttribute("aria-pressed") === "true") return;
@@ -3179,65 +3121,14 @@ function wirePieViewToggle(){
 }
 wirePieViewToggle();
 
-// Drag the divider between the item list and the pie to resize their
-// split — the list pane gets a pinned px width (min 220px, max 78% of
-// the row so the chart pane always keeps some room); the chart pane is
-// flex:1 and just takes what's left. Disabled below the 900px breakpoint,
-// where the two panes stack instead of sitting side by side (see CSS).
-function wireEppieResizer(){
-  var resizer = document.getElementById("epPieResizer");
-  var grid = resizer && resizer.closest(".eppie-grid");
-  var listCol = grid && grid.querySelector(".eppie-list-col");
-  if (!resizer || !grid || !listCol) return;
-  var dragging = false, startX = 0, startW = 0;
-  function clampWidth(px){
-    var rowW = grid.getBoundingClientRect().width;
-    var min = 220, max = Math.max(min, rowW * 0.78);
-    return Math.max(min, Math.min(max, px));
-  }
-  function onMove(e){
-    if (!dragging) return;
-    var x = e.touches ? e.touches[0].clientX : e.clientX;
-    listCol.style.width = clampWidth(startW + (x - startX)) + "px";
-  }
-  function stop(){
-    dragging = false;
-    resizer.classList.remove("dragging");
-    document.removeEventListener("mousemove", onMove);
-    document.removeEventListener("mouseup", stop);
-    document.removeEventListener("touchmove", onMove);
-    document.removeEventListener("touchend", stop);
-  }
-  function start(e){
-    dragging = true;
-    startX = e.touches ? e.touches[0].clientX : e.clientX;
-    startW = listCol.getBoundingClientRect().width;
-    resizer.classList.add("dragging");
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", stop);
-    document.addEventListener("touchmove", onMove, { passive:false });
-    document.addEventListener("touchend", stop);
-    e.preventDefault();
-  }
-  resizer.addEventListener("mousedown", start);
-  resizer.addEventListener("touchstart", start, { passive:false });
-  resizer.addEventListener("keydown", function(e){
-    var step = 28, w = listCol.getBoundingClientRect().width;
-    if (e.key === "ArrowLeft"){ listCol.style.width = clampWidth(w - step) + "px"; e.preventDefault(); }
-    else if (e.key === "ArrowRight"){ listCol.style.width = clampWidth(w + step) + "px"; e.preventDefault(); }
-  });
-}
-wireEppieResizer();
-
 /* ============================================================
-   7. Filter bar for the bottom (full) table only
+   7. Filter bar for the Table/Chart/Buttons block
    ------------------------------------------------------------
    Mirrors the Project Report combobox component (same .cb/.pop/
-   .opt/.chips CSS, new `epCard`-prefixed element ids). Filtering
-   here only ever touches state.filters/state.filtered, which
-   feed the KPI band, its row count, and the card list below —
-   never the pie or its item list (§6), which always show the
-   whole sheet regardless of what's filtered here.
+   .opt/.chips CSS, `epCard`-prefixed element ids kept from when
+   this filtered a separate card list). Filtering here touches
+   state.filters/state.filtered, which now feed the KPI band and
+   every one of the table/chart/buttons views (§6).
    ============================================================ */
 var openPop = null;
 function cid(k){ return "epcard_" + k.replace(/[^a-z0-9]/gi, "_"); }
@@ -3375,80 +3266,17 @@ function renderCardChips(){
 }
 
 /* ============================================================
-   9. The grouped line-item list
-   ------------------------------------------------------------
-   One card per source row. A row with a single P/N shows it
-   inline; a row with several (paired P/N + Qty lines) nests
-   them beneath, distinguishable but still visibly one row.
-   ============================================================ */
-function renderCard(rec){
-  var single = rec.items.length <= 1;
-  var head_ =
-    '<div class="epc-head">' +
-      '<div class="epc-proj">' +
-        '<span class="epc-no mono">'+esc(rec.projectNo || "—")+'</span>' +
-        '<span class="epc-name">'+esc(rec.projectName || "—")+'</span>' +
-        (single ? '<span class="epc-inline"><span class="epi-pn mono">'+esc(rec.items[0] ? rec.items[0].pn : "—")+'</span>'+
-          (rec.items[0] ? '<span>· Qty '+(rec.items[0].qty==null?"—":nfInt.format(rec.items[0].qty))+'</span>' : '') +
-          '</span>' : '') +
-      '</div>' +
-      '<div class="epc-right">' +
-        '<span class="epc-date">'+(rec.shipDate===null?"—":fmtDate(rec.shipDate))+'</span>' +
-        '<span class="epc-value'+(rec.value<0?" neg":"")+'">'+money(rec.value)+'</span>' +
-      '</div>' +
-    '</div>';
-  var items = !single ? '<div class="epitems">' + rec.items.map(function(it){
-      return '<div class="epitem'+(it.qty==null?" bad":"")+'"><span class="epi-pn mono">'+esc(it.pn)+'</span><span class="epi-qty">'+(it.qty==null?"—":nfInt.format(it.qty))+'</span></div>';
-    }).join("") + '</div>' : "";
-  var chips = [];
-  if (rec.priority) chips.push('<span class="epchip">Priority '+esc(rec.priority)+'</span>');
-  if (rec.type) chips.push('<span class="epchip">Type '+esc(rec.type)+'</span>');
-  if (rec.license) chips.push('<span class="epchip">License '+esc(rec.license)+'</span>');
-  if (rec.oven) chips.push('<span class="epchip">Oven '+esc(rec.oven)+'</span>');
-  if (rec.techLines.length) chips.push('<span class="epchip">Tech: '+esc(rec.techLines.join(", "))+'</span>');
-  var metaLines = [];
-  if (rec.remarks) metaLines.push('<div class="epc-remarks"><b>Remarks</b> '+esc(rec.remarks)+'</div>');
-  if (rec.notes1) metaLines.push('<div class="epc-notes"><b>Notes</b> '+esc(rec.notes1)+'</div>');
-  if (rec.deliveryRisks) metaLines.push('<div class="epc-notes"><b>Delivery risk</b> '+esc(rec.deliveryRisks)+'</div>');
-  var meta = chips.length ? '<div class="epmeta">'+chips.join("")+'</div>' : "";
-  return '<div class="epcard'+(rec._qtyMismatch?" mismatch":"")+'" tabindex="0" role="article">' +
-    head_ + items + meta + metaLines.join("") + '</div>';
-}
-function renderList(){
-  var host = document.getElementById("epList"), moreWrap = document.getElementById("epLoadMoreWrap");
-  var data = state.filtered;
-  if (!data.length){
-    host.innerHTML = anyFilter()
-      ? '<div class="empty" style="padding:52px 16px"><b>No rows match</b>Remove a filter, or clear them all, to see rows again.</div>'
-      : '<div class="empty" style="padding:52px 16px"><b>No rows</b>No data in this sheet.</div>';
-    moreWrap.hidden = true;
-    return;
-  }
-  var slice = data.slice(0, state.visibleCount);
-  host.innerHTML = slice.map(renderCard).join("");
-  moreWrap.hidden = state.visibleCount >= data.length;
-}
-function renderCount(){
-  var t = activeSheet().rows.length, f = state.filtered.length;
-  document.getElementById("epRowCount").innerHTML =
-    "Showing <b>" + nfInt.format(f) + "</b> of " + nfInt.format(t) + " rows" + (anyFilter() ? "" : " (unfiltered)");
-}
-
-/* ============================================================
-   10. Master render + sheet switching
+   9. Master render + sheet switching
    ============================================================ */
 function render(){
   recompute();
-  state.visibleCount = PAGE_SIZE;
   renderKpis();
-  renderPie();
   renderCardChips();
-  renderCount();
-  renderList();
+  renderPie();
 }
 function switchSheet(sheet){
   state.sheet = sheet;
-  state.filters = {}; state.visibleCount = PAGE_SIZE;
+  state.filters = {};
   state.totals = totalsOf(activeSheet().rows);
   render();
 }
@@ -3550,12 +3378,19 @@ window.addEventListener("drop", function(e){
   if (f) epHandleFile(f);
 }, true);
 
-document.getElementById("epLoadMore").addEventListener("click", function(){
-  state.visibleCount += PAGE_SIZE;
-  renderList();
+// The Table/Chart/Buttons block (and its filter bar) is collapsed by
+// default — a click on this button in the KPI row reveals it, right next
+// to the KPI cards it summarizes. render() keeps populating it even while
+// hidden, so it's ready to show the instant it's revealed.
+var epToggleViewBtn = document.getElementById("epToggleViewBtn");
+var epViewBlock = document.getElementById("epViewBlock");
+epToggleViewBtn.addEventListener("click", function(){
+  var show = epViewBlock.hidden;
+  epViewBlock.hidden = !show;
+  epToggleViewBtn.setAttribute("aria-expanded", show ? "true" : "false");
 });
 
-/* ---------- bottom-table filter bar: clear-all + mobile drawer ---------- */
+/* ---------- filter bar (Table/Chart/Buttons block): clear-all + mobile drawer ---------- */
 document.getElementById("epCardClearAll").addEventListener("click", function(){ state.filters = {}; render(); });
 var epCardFiltersSection = document.getElementById("epCardFiltersSection");
 var epCardMfToggle = document.getElementById("epCardMfToggle");
