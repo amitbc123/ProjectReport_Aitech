@@ -240,16 +240,17 @@ regex) — a documented quirk of one real file, not a general rule. If a
 future export ever adds a header row to "Old", `findHeaderMap` will find it
 first and the fallback path simply won't trigger.
 
-A sheet that has neither a header nor a wide-enough first row is left out of
-the loaded sheet list entirely (not shown as an empty tab), and the user
-gets a toast naming it, so nothing is silently dropped without being told.
-
-**Sheet ordering**: whatever sheet name *isn't* one of the three fixed names
-(`done`, `open issue with r&d`, `old`, case-insensitive) is treated as "the
-current one" and sorted first. This means the app needs no hardcoded
-knowledge of "JUNE 26" — next month's "JULY 26" sheet is picked up
-automatically as the default/first tab, exactly like the daily Project
-Report file's own month-rotation handling.
+**Only the current sheet is parsed** (August 2026 redesign — see §5). Sheet
+names are sorted, by name alone, *before* any parsing happens: whatever name
+*isn't* one of the three fixed names (`done`, `open issue with r&d`, `old`,
+case-insensitive) sorts first and is treated as "the current one". Only that
+one sheet is then passed to `parseSheet`. This means the app needs no
+hardcoded knowledge of "JUNE 26" — next month's "JULY 26" sheet is picked up
+automatically — and, as a side effect, the `"Old"` archive (~2,600 rows) and
+the other two fixed sheets are never parsed at all, since nothing in the UI
+shows them anymore. A sheet that has neither a header nor a wide-enough
+first row throws `NO_SHEETS`; there is no multi-sheet fallback to try
+because there is no second sheet in play.
 
 ### 4.2 The P/N ↔ Qty. line-pairing rule
 
@@ -373,39 +374,533 @@ resets the visible count back to 150.
 
 Default sort is by ship date, ascending, nulls last — there's no
 column-header sort UI (that concept doesn't really apply to a card layout).
-This is a intentionally minimal choice for v1; a "sort by" control would be
-a reasonable follow-up if it turns out to matter in practice.
 
-### 5.2 Filters, ranked panels, timeline
+### 5.2 August 2026 redesign: no filters, no sheet tabs, a pie instead of ranked panels
 
-All three reuse the *exact same CSS classes* as Project Report
-(`.filters`/`.cb`/`.pop`/`.opt`, `.rt`/`.rrow`/`.rth`, `.tl-scroll`/`.tl-band`)
-— since that CSS is class-based, not id-based, none of it needed to be
-duplicated; only the JS wiring (new element ids, `ep`-prefixed) is new.
+The user asked for a full visual redo of this page, on the premise that only
+one worksheet in the workbook is ever actually looked at (the current-month
+sheet — "Done" / "OPEN ISSUE WITH R&D" / "Old" are noise for this view) and
+that this sheet doesn't need the filter UI Project Report has. Concretely,
+compared to the original v1 design described above (still accurate for
+Project Report, and for §5.1's card layout here):
 
-- **Filters**: Project #, Customer/Project name, P/N, Tech, Priority, Type,
-  Ship date. P/N and Tech are the two *multi-valued* facets (a record can
-  match a filter through any one of its items/tech lines) — `facetValues()`
-  returns an array per record per column, and both the cross-filter facet
-  counting and the match test (`recordMatches`) iterate over that array,
-  generalizing the single-value logic Project Report uses.
-- **Ranked panels**: "Top projects by value" (group by `projectNo`, sum
-  `value`) and "Top P/N by quantity" (flatten every record's `items`, group
-  by `pn`, sum `qty`) — value isn't itemized per P/N in the source data (see
-  §4.2), so ranking P/N by value wouldn't be meaningful; quantity is.
-- **Timeline**: identical bucketing logic to Project Report (month → quarter
-  → year based on how many distinct months are present), duplicated rather
-  than shared for the same reason as the format helpers in §4.
+- **The sheet-switcher segmented control (`epSheetToggle`) is gone**, along
+  with the multi-sheet parsing that fed it — see §4.1's "Only the current
+  sheet is parsed". The header now holds just the brand/switch-page row and,
+  right-aligned, "Load another file" + the loaded filename/sheet/row-count
+  (`epFilemeta`).
+- **The filter bar (`epFiltersSection`, `.cb`/`.pop`/`.opt` combobox fields,
+  chips, mobile filter drawer) is gone entirely** — `FILTER_COLS`,
+  `facetValues`, `recordMatches`, `state.filters`, `state.period` and
+  everything that fed them were deleted. `state.filtered` is now just
+  `activeSheet().rows`, sorted by ship date — there is no filtering step.
+- **The KPI band (`#epKpis`) is `position:sticky`**, pinned directly under
+  the sticky header (`top:var(--epHeaderH)`) so it's always visible while
+  scrolling the list below — this is the "parameters row" the request asked
+  to keep, just anchored. The quality bar (rows without a date/P·N, credit
+  rows, mismatched pairings) that used to sit under it was removed along
+  with everything else below the KPI rule, per the request.
+- **The timeline chart and the two ranked panels (`renderTimeline`,
+  `renderByProject`/`renderByPN` in the original design) are replaced by a
+  pie/donut breakdown** (`renderPie`, `#epPieChart`) with a **P/N ↔ Project**
+  toggle (`#epPieToggle`) above it, sized by summed quantity — `groupByPN`
+  and `groupByProject` are reused from the old ranked-panel code (their sort
+  order changed from by-value to by-qty, since qty is now the only thing
+  either mode encodes). The pie shows the top 7 groups as fixed, ordered
+  categorical hues (`--series-1`..`--series-7` in `:root` — see
+  `dataviz` skill's color-formula for why the order is fixed and not
+  generated) plus an eighth "N more" slice in neutral `--slate` for the
+  remainder — an all-pairs adjacency read (any two pie slices can be
+  neighbours) doesn't cleanly clear CVD separation past 3 hues, so the cap
+  at 7 + Other, with direct-label relief (the legend's text labels + the
+  item list beside it), is the documented trade-off for going past that.
+  `annularPath`/`polar` are small hand-rolled SVG donut-arc helpers, in the
+  same "no charting library, hand-rolled SVG" style as Project Report's own
+  timeline (which this replaces).
+- **Beside the pie, at the same height** (`.eppie-grid`, `--eppie-h`), a
+  plain scrollable list (`renderPieList` → `flattenItems`) shows every
+  line item — one row per P/N (or one row for a record with none) — as
+  **Project / P/N / Qty / Value in US$**, in the sheet's own row order
+  (see §5.3), always reflecting the whole sheet regardless of which pie
+  mode is active (this list doesn't change when you toggle P/N ↔ Project;
+  only the pie does).
+- The full card list (§5.1) is unchanged and still sits below a rule, at
+  the bottom of the page, exactly as before — only what used to be *above*
+  it (the original filters, timeline, ranked panels) changed. (A different
+  filter bar came back above it in the §5.3 follow-up — read on.)
+- Card click-to-filter (`setOnly("projectNo", …)` on card click) was removed
+  along with the filter system it depended on; cards are no longer
+  clickable, just `role="article"`.
 
-### 5.3 KPI band & quality bar
+One CSS gotcha hit while building this: the pie's P/N/Project toggle reuses
+the site's `.segmented` pill-button styling for visual consistency with the
+header's old sheet-toggle. But `.segmented{order:3}` inside the shared
+`@media (max-width:640px)` block (written for reordering the *header's*
+segmented control among flex-wrapped siblings) also matched this new
+`.segmented`, and — since `.eppie-chart-col` is itself a `flex-direction:
+column` box — silently reordered the toggle to *after* the chart on phones.
+Fixed with a same-specificity `.eppie-toggle{order:0}` declared later in the
+stylesheet, which wins the cascade tie unconditionally rather than only
+inside that one media query. Worth remembering if another `.segmented`
+instance gets added somewhere flex-column'd: that mobile `order:3` rule is
+easy to forget is there.
 
-Five cards: Total value, Total quantity (summed across all items, not
-records), Projects (distinct `projectNo`), Distinct P/N, Rows shown. The
-quality bar below reports, for the *active sheet* (unfiltered): rows without
-a ship date, rows without a P/N, credit (negative-value) rows, values that
-failed to parse, and — the new one — rows where the P/N/Qty line pairing
-was best-effort. This mirrors Project Report's "don't hide data problems,
-surface them" convention.
+### 5.3 Same-day follow-up: no legend, hover-linked list, bigger pie, filters are back (for the table only)
+
+A second round of feedback on §5.2, addressed the same day:
+
+- **The separate pie legend (`renderPieLegend`, `#epPieLegend`, `.epleg-*`)
+  is gone** — the request was explicit that the item list *is* the legend,
+  so a second list-shaped thing under the donut was redundant. The pie's
+  `<title>` per `<path>` still carries the full label for anyone who wants
+  it (screen readers, a slow native tooltip), but the primary way to read a
+  slice is now interaction, not a static key.
+- **Hover (or keyboard focus) on a slice now does two things**
+  (`renderPieChart` → `wirePieHover`): the donut's center label swaps from
+  the sheet total to that slice's own qty + share (two `<text>` nodes,
+  `#epPieCenterVal`/`#epPieCenterLab`, textContent-swapped, not
+  re-rendered), and every matching row in `#epPieList` gets a `.hl`
+  highlight (`data-project`/`data-pn` attributes written per row in
+  `renderPieList`, matched against the slice's `key` — or, for the "N
+  more" slice, against its `otherKeys` array, so hovering "Other" lights
+  up every folded-in row at once). The first matched row also gets
+  `scrollIntoView({block:"nearest", behavior:"smooth"})`, since the row
+  proving the highlight actually works is often scrolled out of view in a
+  ~380px-tall list. `mouseenter`/`mouseleave` and `focus`/`blur` share the
+  same two handlers, so tabbing through the slices (each has
+  `tabindex="0"`) gets the identical effect for keyboard users.
+- **The pie is bigger**: 268px/rOuter 126/rInner 60, up from 232/108/54 —
+  there was headroom to spend once the legend (which used to compete for
+  the same column height) was removed. `--eppie-h` (the shared column
+  height both sides match) actually came *down*, from 440px to 380px
+  desktop, since a lone toggle + donut needs less vertical room than
+  toggle + donut + a potentially-long legend did.
+- **The item list is now in the sheet's own row order**, not the
+  ship-date-ascending order used elsewhere. `renderPie()` reads straight
+  from `activeSheet().rows` (the parser's natural, unsorted order — see
+  §4's "Only the current sheet is parsed") instead of `state.filtered`;
+  `state.filtered` is now exclusively the bottom table's business (next
+  bullet). Sort order for the pie's own aggregation doesn't matter (it's
+  summed into groups either way), only the list's display order does.
+- **A filter bar is back — scoped to the bottom (full) table only.** This
+  is close to a straight revival of §5.2's deleted `renderFilterBar`/
+  `wireCombo`/`FILTER_COLS`/`facetValues`/`recordMatches` (same 7 columns,
+  same combobox component), renamed with an `epCard`-prefix
+  (`renderCardFilterBar`, `wireCardCombo`, `toggleFilter`,
+  `renderCardChips`, `#epCardFiltersSection`) and moved to sit directly
+  above `.tablewrap` instead of at the top of the page. Crucially,
+  `state.filters`/`state.filtered` now mean "the bottom table's filters" —
+  the KPI band reads `state.filtered` too (so "X of Y" is meaningful again
+  when a filter is active), but the pie and its item list deliberately do
+  **not** — they read `activeSheet().rows` directly (previous bullet), so
+  filtering the table never changes what the pie shows. This was a
+  conscious split, not an oversight: the request asked for filters on "the
+  bottom table", not the summary section above it.
+- **CSS gotcha #2**: `.filters` (shared with Project Report and with the
+  original §5.2 filters this reuses) has a `@media (max-width:640px)` rule
+  that makes it `position:sticky; top:var(--headerH/--epHeaderH)` — correct
+  when `.filters` is the page's first content row, wrong here since this
+  instance sits mid-page. Fixed with an ID-scoped override,
+  `#epCardFiltersSection{position:relative; top:auto; margin-top:16px}`
+  inside the same media query (ID beats class, and it's declared after the
+  generic rule, so it wins outright rather than needing `!important`). It
+  still needs `position:relative` (not `static`) on mobile, though, because
+  `.fpanel`'s mobile dropdown is `position:absolute` and anchors to the
+  nearest positioned ancestor — dropping position entirely would let the
+  dropdown escape to whatever ancestor *is* positioned and mis-place it.
+
+### 5.4 Third round: direct labels, hover vs. click split, per-project colors, merged value cells
+
+A third round of feedback the same day, on the pie + list from §5.2/§5.3:
+
+- **Every slice is now direct-labelled**, not just tooltip-on-hover: a thin
+  leader line (outer edge → a short radial step → a horizontal stub) ends
+  at the slice's key, truncated to 13 chars with `truncateLabel`. This is
+  why the SVG's own coordinate space grew to a 520×400 `viewBox` (`cx=260,
+  cy=200, rOuter=118, rInner=56`) even though the *rendered* pie itself is
+  about the same size as before — the extra canvas is label margin on every
+  side, since a slice can sit anywhere around the circle. The `<svg>` has
+  no `width`/`height` attributes anymore, only the viewBox — CSS
+  (`.eppie-chart svg{width:100%; max-width:480px; height:auto}`) scales it
+  to fit the column while keeping the label margins proportional at every
+  size, which is also what makes the mobile shrink
+  (`max-width:340px` at 640px) a one-line CSS change instead of a second
+  hand-computed geometry.
+- **Hover and click now do different things**, on request — previously
+  hover drove the list highlight, which the user found the wrong trigger:
+  - **Hover (or keyboard focus)** only *previews*: the slice's path `d` is
+    regenerated with `rOuter + PIE_HOVER_GROW` (9px) — geometry, not a CSS
+    `transform: scale()`, because scaling an annular sector from the donut
+    center moves the *inner* edge too and dents the hole; regenerating the
+    path keeps `rInner` fixed and only the outer edge moves. The center
+    label swaps to the hovered slice's qty/share for the duration of the
+    hover, unless a slice is picked (next bullet) — then hovering a
+    *different* slice still previews it, but releasing the hover reverts to
+    the *picked* slice's label, not the total.
+  - **Click "picks" a slice** (toggles — clicking the same slice again
+    un-picks it, clicking a different one moves the pick). Picking is what
+    drives `highlightPieListSlice()` — the `.hl` class on matching
+    `#epPieList .epsl-cell` elements, and the `scrollIntoView` of the first
+    match — and adds a `.picked` class to the path (`stroke:var(--ink);
+    stroke-width:3px`) as the persistent "this one's selected" indicator.
+    Keyboard users get the same toggle via Enter/Space (`keydown` on each
+    `tabindex="0"` path).
+  - The stray rectangle the user saw on click was the browser's default
+    SVG focus outline (`outline: 2px solid var(--gold)` on
+    `:focus-visible` in the previous round) — `outline` on an SVG path
+    always draws the element's *bounding box*, not the path shape, which
+    reads as a random square over a donut wedge. Removed outright
+    (`.eppie-chart path{outline:none}`); the `.picked` stroke (which does
+    follow the wedge's actual shape) is the only "this is the selected
+    one" affordance now.
+- **Every row in the item list gets a per-project color swatch**
+  (`buildProjectColorMap`, a small `<i class="epsl-swatch">` before the
+  Project text), ranked and colored the same way `groupByProject` ranks
+  for the pie (by qty desc, `SERIES_COLORS[i % 7]`) — so two rows sharing
+  a project always share a color, and a project with only one P/N line
+  still gets its own color, not gray. This is independent of the pie's
+  current mode: in P/N mode the pie's own slice colors encode *P/N*
+  identity while the list's swatches simultaneously encode *project*
+  identity — two different color systems on screen at once by design,
+  since they answer different questions.
+- **Rows sharing a project get one merged Value cell**, not a repeated
+  figure — requested separately, mid-round, after seeing the same dollar
+  amount printed on every P/N line of a multi-P/N project. "Same project"
+  here means *consecutive* rows only (never rows reordered from elsewhere
+  in the list) — in practice this is exactly one source record's several
+  P/N lines, which is the only case where the value is genuinely identical
+  by the data model (§4.2: value belongs to the whole row, not a P/N).
+  Implementing a real spanning cell forced a structural change:
+  `#epPieList` used to be one flex column of `.epsl-row` divs, each its
+  own 4-column grid; it's now a *single* CSS grid
+  (`.eppie-listscroll{display:grid; grid-template-columns:1.1fr 1.3fr .7fr
+  .9fr}`) and `renderPieList` emits flat `.epsl-cell` spans with an
+  explicit `grid-row` (and an implicit `grid-column` from each cell's own
+  class, `.epsl-proj{grid-column:1}` etc.) instead of row wrapper divs.
+  For a group of *N* consecutive same-project rows, the Project/P·N/Qty
+  cells still render N times (one per row), but the Value cell renders
+  **once**, positioned `grid-row: <start> / span N` — a genuine merged
+  cell (vertically centered by the cell's own `align-items:center`), not
+  N repeated numbers or a rowspan-look-alike. It also carries every
+  member P/N in its `data-pn`, `|`-joined (`groupPns`), so that clicking a
+  P/N slice for *any* one of the group's P/Ns still correctly highlights
+  the shared Value cell along with that specific P/N's own row. A
+  `.merged` class adds a `border-left` "bracket" as a visible cue that the
+  figure spans more than one row. Explicit `grid-row`/`grid-column` on
+  every cell (rather than leaning on CSS Grid's auto-placement to skip
+  around the spanned cell) was a deliberate choice to keep this
+  deterministic — auto-placement interacting with an explicit span is
+  usually fine but not worth the risk of a subtle browser-version-specific
+  misplacement in hand-verified code with no test framework.
+
+### 5.5 Fourth round: no cap on slices, a much bigger pie, framed/linked groups
+
+- **The Top-7 + "N more" cap is gone.** The user's objection wasn't to the
+  cap as such but to the bucket having no identity ("it's supposed to be a
+  project or a P/N") — so `pieSlices()` now returns one slice per distinct
+  group, full stop, no `PIE_TOP_N`/`PIE_OTHER_COLOR`/`isOther`/`otherKeys`.
+  Colors still cycle the 7-slot palette past 7 groups
+  (`SERIES_COLORS[i % 7]`) — same scheme `buildProjectColorMap` already
+  used for the list's swatches, so a real dataset with, say, 17 distinct
+  P/Ns just repeats hues past the 7th rather than graying anything out.
+  Removing the cap immediately surfaced a labeling problem: many small
+  slices clustered on one side of the donut produced overlapping label
+  text. Fixed with a small decluttering pass in `renderPieChart` — collect
+  every label's natural position, split into the right half/left half (by
+  `dir = cos(am) >= 0`), sort each half top-to-bottom by y, and push any
+  label down that's within 13px of the one above it in its half. The
+  leader line gained a third point (an elbow at the *original* x, *nudged*
+  y) so it still visually starts from the slice and bends over to the
+  final label position rather than pointing at a spot the label isn't
+  at. This is a one-pass top-down push, not true force-directed layout —
+  fine for the realistic slice counts here (tens, not hundreds), but a
+  dataset with a great many same-side thin slices could still push labels
+  past the canvas edge; nobody has hit that yet.
+- **The pie is much bigger — by design, not by accident.** Two changes
+  compound: the list column went from flexible-and-wide to a fixed
+  `300px` (`.eppie-grid{grid-template-columns:300px 1fr}`, chart column
+  now gets whatever's left, `1fr`), and the SVG's own `viewBox` shrank
+  from a generously-margined 520×400 down to a tightly-measured 500×290
+  (`cx=250, cy=145, rOuter=118` unchanged) — the earlier version left a
+  lot of unused vertical canvas (only ~132 of the 200px half-height above/
+  below center was ever reachable by a label), so tightening the margin
+  to what labels actually need let the same `rOuter` render much larger
+  once scaled up by CSS. `.eppie-chart svg{max-width:950px}` (from 480px)
+  is what actually stretches it — on a typical desktop width the donut's
+  rendered diameter roughly doubled. `--eppie-h` (the shared column
+  height) grew to match (620px desktop, stepped down at the existing
+  1180/900/640px breakpoints), and the 900px breakpoint's `max-width` also
+  grew (700px) since the stacked single-column layout has the full page
+  width to itself there.
+- **Groups are visibly framed, and hovering marks the whole group** — a
+  new `.epsl-frame` element (`border:1px solid var(--line-strong)`,
+  `pointer-events:none` so it never steals the click/hover from the cells
+  stacked on top of it) is emitted for every group of 2+ rows, positioned
+  with the same `grid-row: start / span N` trick as the merged Value
+  cell, but spanning `grid-column: 1/-1` (the whole row width) instead.
+  Every cell belonging to a group (frame included) shares a `data-group`
+  index, assigned sequentially in `renderPieList` (including groups of
+  size 1, which just don't get a rendered frame element). Hover is wired
+  generically over every `[data-group]` element post-render
+  (`wireListInteractions`): entering any member adds `.grouphover` to
+  every element sharing that index, in one query — this is what lets a
+  1px-bordered, pointer-events-none frame still visually react, since its
+  own class is toggled by its sibling cells' hover, not by hovering the
+  frame itself (which wouldn't receive the event anyway).
+- **Clicking a list row now picks the matching pie slice — the reverse of
+  the existing pie→list link.** This forced the pie's pick/hover state out
+  of `renderPieChart`'s local closures and into a module-level `pieState`
+  object (`slices`, `total`, `mode`, `pickedIdx`, `geom`, plus cached
+  `svg`/`centerVal`/`centerLab` refs) with free functions
+  (`pieShowTotal`, `pieShowSlice`, `pieSetGrown`, `pieTogglePick`,
+  `pieFindSliceIndex`) operating on it — both the pie's own path-click
+  handler and the list's cell-click handler now call the same
+  `pieTogglePick(idx)`, so there's exactly one place that owns "what's
+  currently picked" regardless of which side triggered it. A list click
+  resolves its target slice by `pieState.mode`: the clicked cell's
+  `data-project` in Project mode, or the *first* `|`-joined P/N in
+  `data-pn` in P/N mode (a merged Value cell or a Project cell in a
+  multi-P/N group carries several P/Ns — clicking picks a specific one
+  rather than being a no-op).
+- **The donut's center label now also shows the picked/hovered slice's
+  money total**, not just qty and share — `sliceMoneyTotal(recs, mode,
+  sl)` sums each *matching record's* `value` once (not once per P/N line,
+  so a 3-P/N record matching a Project slice — or matching one of its own
+  P/Ns in P/N mode — still only contributes its value a single time).
+  Requested after the user picked a multi-row project slice and only
+  wanted to see one row highlighted plus a total — the highlighting itself
+  was already correct (every cell whose `data-project`/`data-pn` matches
+  lights up, which for a 3-row project group is 9 cells + the merged
+  Value cell = 10), so the real gap was the missing money figure, now
+  `pct% · $total` on the label's second line.
+
+### 5.6 Fifth round: the pie had gotten too big — walked back to ~40%, on-demand labels, a draggable split
+
+Round four over-corrected — the user came back saying the pie was now
+"huge," eating ~80% of the screen, and asked for roughly a 40/60 chart/list
+split instead, no always-on labels, and a way to *adjust* that split
+themselves rather than have it hardcoded either way:
+
+- **`.eppie-grid` changed from CSS grid to flexbox**, specifically so the
+  split can be dragged. `.eppie-list-col` is `flex:0 0 auto; width:60%`
+  (not `flex:0 0 60%` — the `flex` shorthand sets `flex-basis`, and
+  `flex-basis` wins over `width` on the main axis whenever it isn't
+  `auto`, which would have silently ignored any `width` the drag handler
+  set later; `flex-basis:auto` is what makes `width` the effective sizing
+  property) and `.eppie-chart-col` is `flex:1 1 auto` — it simply gets
+  whatever's left, so the two always sum to the full row width by
+  construction.
+- **The pie itself shrank** — not by changing the SVG's internal geometry
+  (`cx/cy/rOuter/rInner` and the tightened 500×290 viewBox from §5.5 are
+  untouched) but by pulling the CSS clamp way back down,
+  `.eppie-chart svg{max-width:420px}` (from 950px). Combined with the list
+  column now defaulting to 60% instead of a fixed 300px, the rendered
+  chart column is close to the requested ~40% share on typical widths.
+- **A drag handle between the two panes** (`#epPieResizer`, a 13px
+  `cursor:col-resize` strip with a thin centered line) lets the user move
+  that split themselves — `wireEppieResizer()` tracks `mousedown`/
+  `mousemove`/`mouseup` (and the touch equivalents) on it, computes the
+  list pane's new width from the drag delta, and clamps it between 220px
+  and 78% of the row so neither pane can be squeezed to nothing. Left/
+  Right arrow keys nudge it by 28px when the handle has focus
+  (`role="separator" tabindex="0"`) for keyboard users. Hidden below the
+  900px breakpoint (`.eppie-resizer{display:none}`), where the panes
+  stack vertically instead of sitting side by side — dragging a
+  horizontal split doesn't mean anything once they're stacked, and the
+  list pane's width is force-reset there (`width:auto !important` — a
+  deliberate, narrow use of `!important`, needed because the drag handler
+  may have left a JS-set inline `width` from a wider viewport, which
+  otherwise beats any non-`!important` stylesheet rule regardless of
+  selector specificity).
+- **Slice labels no longer show at rest.** Every `.epslice-label` starts
+  `opacity:0` (`transition:opacity .1s`); a `.show` class — toggled by
+  `pieSetLabelVisible(idx, visible)` — is the only thing that reveals one.
+  That function is called from the exact same places that already existed
+  for the grow/pick effects (§5.4/§5.5), so no new interaction model was
+  needed: hovering/focusing a slice shows its label (`preview()`) and
+  hides it again on leave *unless* that slice is the picked one
+  (`unpreview()` checks `idx !== pieState.pickedIdx` before hiding);
+  picking a slice shows its label and keeps it shown until it's un-picked
+  or another slice is picked (`pieTogglePick`, which now also calls
+  `pieSetLabelVisible` on both the outgoing and incoming index). Net
+  effect: at most two labels are ever visible at once — the picked one (if
+  any) and whatever's currently under the pointer — so the donut reads
+  clean by default and the earlier decluttering pass (§5.5) rarely even
+  gets exercised now that labels aren't all on-screen simultaneously.
+
+### 5.7 Sixth round: the pie was still too small for the space it had, labels move below it, group clicks fixed
+
+The §5.6 walk-back overshot in the other direction: a screenshot showed a
+donut sitting in the middle of a mostly-empty panel, because
+`.eppie-chart svg{max-width:420px}` was an arbitrary cap that had nothing
+to do with how much room the column actually had. This round removes the
+cap entirely in favor of true fit-to-container sizing, moves the slice
+name out of the leader-line system (gone) into a caption reserved below
+the donut, and fixes two real bugs in the list's click behavior that
+surfaced once someone was actually using it.
+
+- **The donut now fills its box, full stop.** `.eppie-chart` and
+  `.eppie-chart svg` are both `width:100%; height:100%` (no `max-width`
+  anywhere, no per-breakpoint override) inside `.eppie-chartscroll`
+  (`flex:1`, so it's exactly "whatever's left in the column after the
+  toggle"). The SVG's own `viewBox` plus the default
+  `preserveAspectRatio="xMidYMid meet"` (never set explicitly — it's the
+  SVG spec default) does the "scale to fit both axes without distorting,
+  centered" part for free; no JS measurement or resize-observer needed.
+  Verified: `getBoundingClientRect()` on the svg and on
+  `.eppie-chartscroll` return the *same* box.
+- **Slice labels don't sit next to the wedge anymore — there's no leader
+  line at all now.** The whole labelItems/decluttering/polyline system
+  from §5.5 is deleted. Instead, a single `<text id="epPieCaption">` sits
+  in a reserved band below the circle (`y = cy + rOuter + 30`, inside a
+  viewBox — 260×280, `cx=130, cy=122, rOuter=104` — sized so that band
+  exists at all). `pieShowSlice`/`pieShowTotal` (already the single place
+  that updates the center qty/%/money text) now also write the caption —
+  the slice's key on `pieShowSlice`, empty string on `pieShowTotal` — so
+  hover-preview and pick already drove the caption for free once those
+  two functions were extended; no separate show/hide wiring was needed
+  this time (contrast with §5.6's `pieSetLabelVisible`, now deleted along
+  with the labels it toggled). Freeing the viewBox from label margins is
+  also *why* the geometry shrank from 500×290 to 260×280 — that's not a
+  smaller donut, it's a tighter box around the same-shaped donut, which
+  is what let removing the CSS max-width actually render bigger instead
+  of just filling wasted margin.
+- **Every group now gets a frame — including a group of one** — the
+  `groupLen > 1` guard on emitting `.epsl-frame` is gone, so a lone P/N
+  under a project gets exactly the same colored box as a 3-line group,
+  just sized to one row. The frame's border/background color comes from
+  a `--frame-color` custom property set inline per group (from
+  `buildProjectColorMap`, same as the swatch dot already used) and
+  consumed by shared CSS via `color-mix(in srgb, var(--frame-color) N%,
+  white)` — this is what lets one set of hover/hl rules brighten *any*
+  group's frame in *that group's own* color without per-instance CSS.
+  `color-mix()` is a modern-Chromium-only feature; acceptable here since
+  this whole app is verified against the pre-installed headless Chromium
+  only (see §7), not a cross-browser target.
+- **Two real bugs, both about what a list click actually marks.** The
+  request was explicit: clicking inside a group should always mark the
+  *whole* group, never a single row picked out of it — group size 1
+  marks that one row (trivially, since the group *is* that row).
+  Previously, `wireListInteractions`'s click handler resolved a cell to a
+  single P/N or project key and called `pieTogglePick`, which (correctly)
+  highlights every cell matching *that key* — fine in Project mode or for
+  a size-1 group (the group and the slice are the same set of cells by
+  construction), but wrong in P/N mode for a multi-P/N group: clicking
+  one P/N line only lit up that one row + the shared Value cell, not the
+  other P/N lines sitting right next to it in the same visibly-framed
+  block. Root cause: a multi-P/N group in P/N mode doesn't correspond to
+  any *single* pie slice — its P/Ns are separate slices — so there was
+  never a "pick" call that could represent "the whole group" in that
+  mode. Fixed with `highlightPieListGroup(host, groupId)`, a
+  `data-group`-keyed sibling to the existing `data-project`/`data-pn`-
+  keyed `highlightPieListSlice`: the click handler now checks
+  `pieState.mode === "project" || groupRowCount(...) <= 1` — the
+  unambiguous case, where a single pie slice really does represent the
+  whole click target, so it still goes through `pieTogglePick` exactly as
+  before (which happens to produce an identical highlight to the group
+  path, since the two sets of matching cells are the same set in that
+  case) — and falls back to `highlightPieListGroup` otherwise, clearing
+  any unrelated pie pick first (`pieTogglePick(pieState.pickedIdx)` on
+  the *current* picked index toggles it off) so the pie never shows a
+  stale, unrelated selection next to a list group that has nothing to do
+  with it.
+
+### 5.8 Seventh round: adjacent-group colors, a Chart/Buttons view toggle, a real highlight bug
+
+- **`buildProjectColorMap` now ranks by list order, not qty rank.** The
+  user could see two neighboring framed groups in nearly the same color —
+  root cause: colors were assigned by `groupByProject`'s qty-descending
+  rank, a completely different ordering than the row order the list
+  actually renders in, so two qty-adjacent (similarly-colored, since
+  `SERIES_COLORS`' sequence was validated for *adjacent-slot* separation)
+  projects could easily end up qty-close but sheet-adjacent by pure
+  coincidence. Fixed by ranking on first-appearance order in
+  `activeSheet().rows` instead — the same order groups are emitted in by
+  `renderPieList` — so consecutive list neighbors always get consecutive
+  palette slots, which is exactly the pairing the palette's own CVD
+  validation covers. This deliberately makes the list's colors diverge
+  from the pie's own (still qty-ranked) slice colors in Project mode,
+  where they used to coincide — see the file for why that's an accepted,
+  intentional trade (two color systems answering two different
+  questions), not an oversight.
+- **A real bug, found while building the above: `.epsl-frame` never
+  carried `data-project`/`data-pn`.** `highlightPieListSlice` (driven by
+  the pie itself — hovering/picking a wedge or a Buttons-view button)
+  matches elements by those two attributes; the frame only ever had
+  `data-group`, so it silently never matched and never got `.hl` from
+  that path — only `highlightPieListGroup` (the list's own ambiguous-
+  click fallback, §5.7) happened to hit it, via `data-group` alone. In
+  other words: the "selection isn't clear enough" complaint was partly a
+  real styling contrast issue (next bullet) and partly this — picking a
+  slice from the *pie side* was leaving the frame's border/background
+  exactly as it looked at rest, for every interaction path except the
+  ambiguous list-click one. Fixed by giving the frame the same
+  `data-project`/`data-pn="…"` (the group's `|`-joined P/Ns, same value
+  the merged Value cell already carries) as its member cells.
+- **The idle vs. selected contrast was also genuinely too subtle** even
+  once the frame started participating — 6% vs 20% tint on the same
+  `color-mix()` scale reads as "slightly more of the same," not "this is
+  now selected." Pushed apart: idle stays put (border ~45% mix, fill 6%),
+  `.hl` jumps to a 3px solid-color border, a much richer 38% fill, and an
+  outer `box-shadow` ring (22% mix) — deliberately closer to "solid block"
+  than "tint," so selected reads unambiguously at a glance. `.grouphover`
+  (the transient hover-only state) sits at a deliberately lower 14%/12% so
+  it stays visually distinct from the persistent `.hl` state — hovering
+  and having-picked no longer look like the same thing at different
+  opacities.
+- **A second way to browse slices: a Chart/Buttons view toggle**
+  (`#epPieViewToggle`, top-right of the chart column, sharing its header
+  row with the existing P/N/Project toggle at top-left — "Chart" and
+  "Buttons" were picked as the clearest plain-English names for "the
+  donut" vs. "a grid of buttons, one per group"). Both views are always
+  rendered (`renderPie()` calls both `renderPieChart` and the new
+  `renderPieButtons` every time; `wirePieViewToggle` only ever toggles
+  which one has the `hidden` attribute), so switching between them is
+  instant and never loses the current pick. Buttons mode
+  (`.eppie-buttons`, `grid-template-columns:repeat(5,1fr)`, 3 columns
+  under the 640px breakpoint) is one button per slice, each colored via
+  the same `--frame-color`-driven `color-mix()` pattern as the list's
+  frames, scrolling if there are more than fit. A button click is always
+  unambiguous — unlike a list-group click, one button is always exactly
+  one slice — so it just calls the same `pieTogglePick` the chart's own
+  wedges use. Keeping both visuals' "picked" look in sync needed
+  `pieTogglePick` to stop reaching into `pieState.svg` directly and go
+  through a new `pieSetPickedClass(idx, on)` that toggles the class on
+  *both* the matching `<path>` (if the chart exists) and the matching
+  `.eppie-btn` (if the button grid exists) — so picking a slice in one
+  view and then switching to the other shows the same slice already
+  marked picked, with no extra state to reconcile.
+
+### 5.9 Eighth round: selection border matches the pie/buttons exactly, spacing between groups
+
+Two follow-ups to §5.8's highlight fix, both quick:
+
+- **`.epsl-frame.hl`'s border is now literally `var(--ink)`** (solid
+  black), not the group's own `--frame-color` at a higher mix percentage.
+  The request was explicit: match the same visual language already used
+  for a picked pie wedge (`.eppie-chart path.picked{stroke:var(--ink);
+  stroke-width:3px}`) and a picked Buttons-view button
+  (`.eppie-btn.picked` — which, on reflection, *also* still used
+  `border-color:var(--frame-color)`, so it got the same fix here for
+  consistency, even though only the list's frame was called out by name).
+  The color-mix'd fill underneath (`--frame-color` at 32%) stays, so the
+  group's own identity color is still visible — only the *border*, the
+  part that actually signals "selected," went to black. This reads as
+  unambiguous regardless of the group's own hue, where a same-hue
+  darker-tint border could still look like "idle, just a bit stronger" at
+  a glance (which was the substance of the original complaint).
+- **A visible gap between groups.** `.eppie-listscroll` is one continuous
+  CSS grid (see §5.2/§5.3), so a uniform `row-gap` was not an option — it
+  would have opened the same gap *inside* a multi-row group, between its
+  own member rows, undoing the "one visual block" effect the frame exists
+  to create. Instead, `renderPieList` now emits an explicit spacer
+  element (`<span class="epsl-gap">`, `height:7px`, no color/border) into
+  its own dedicated grid row between one group's last row and the next
+  group's first — `gridRow` advances by one extra when there's a
+  following group. Deliberately a real sized grid item and not an
+  unreferenced row left to auto-collapse: an empty grid track has no
+  content to size itself from and can't be trusted to render at any
+  particular height across browsers/versions.
 
 ## 6. Remembering the last file (Export Plan)
 
@@ -472,6 +967,27 @@ workbooks. Covered:
   expected toast, without disturbing Project Report's own (empty, in that
   test) cached state.
 
+**August 2026 redesign (§5.2) re-verification**: the two original sample
+workbooks aren't in the repo (see §2) and weren't re-attached for this pass,
+so a synthetic `.xlsx` was built (openpyxl) with a "JUNE 26" sheet — a
+row-24-style multi-P/N record, a single-P/N record, a negative-value
+(credit) record, a record with a blank ship date, and one legend-shaped row
+(`Project #` blank) to re-confirm §4.3's skip still holds — plus `Done` /
+`OPEN ISSUE WITH R&D` / `Old` sheets left in the workbook specifically to
+confirm they're never parsed. Verified with Playwright against
+`file://index.html`, desktop (1440×900) and iPhone-sized (390×844):
+sheet-toggle and filter DOM (`#epSheetToggle`, `#epFiltersSection`,
+`#epQuality`, `#page-export .charts`) are gone; `#epKpis` is
+`position:sticky` and its top edge tracks the header's bottom edge while
+scrolled; the pie/list pair renders and reacts to the P/N ↔ Project toggle
+with the expected grouped quantities; the item list stays constant across
+that toggle; the card list below is unaffected; zero console/page errors on
+either viewport. Also re-ran Project Report's own drop screen afterward to
+confirm it still loads with zero console errors — this redesign didn't
+touch that module, but the shared CSS (`:root` categorical palette vars,
+the `.segmented{order:3}` interaction from §5.2) is a plausible place for a
+regression to sneak in, so it was worth the extra check.
+
 ## 8. Known limitations / deliberately deferred
 
 - No "suspect year" quality flag for Export Plan dates (Project Report has
@@ -491,3 +1007,11 @@ workbooks. Covered:
   first.
 - No folder auto-connect for Export Plan (see §6) — by-hand file picking
   and the cached-file restore only.
+- The item list beside the pie (§5.2) is rendered in one shot, with no
+  "Show more" pagination like the card list has — reasonable given only the
+  current sheet is ever parsed now (tens to low hundreds of rows, not the
+  ~2,600-row "Old" archive), but worth revisiting if a future current-month
+  sheet turns out to be unusually large.
+- The pie caps at 7 explicit slices + one "N more" slice; there's no way to
+  expand "N more" to see what's folded into it beyond scrolling the item
+  list beside it, which isn't filtered to match.
