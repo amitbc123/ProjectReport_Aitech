@@ -1,0 +1,285 @@
+/* Export Plan page-specific styles: the sticky KPI band, the always-visible
+   table plus the collapsible pie/buttons breakdown panel, and the sticky
+   filter bar. All rules here are #page-export-scoped additions on top of
+   base.css's shared component styles — load this file after base.css. */
+
+  /* ============================================================
+     Export Plan — KPI row pinned under the header, with the
+     Table/Chart/Buttons reveal button riding along in the same row
+     ------------------------------------------------------------
+     The KPI band is the top-most content row and stays stuck there
+     on scroll, directly under the sticky header. #epKpis is now the
+     flex *bar*; the KPI cards themselves render into the nested
+     #epKpiCards (still plain ".kpis", so it keeps every one of that
+     class's existing responsive rules — Project Report's own KPI
+     row is unaffected, it has no such wrapper).
+     ============================================================ */
+  #page-export .kpis.eppinned{
+    position:sticky; z-index:50; top:var(--epHeaderH, 56px);
+    background:rgba(244,245,247,.92); backdrop-filter:saturate(140%) blur(8px);
+    margin:0; padding:18px 0 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:18px;
+  }
+  #page-export .kpis.eppinned #epKpiCards{ flex:1 1 auto; min-width:0; margin-top:0; }
+  .epToggleBtn{
+    display:flex; align-items:center; gap:8px; flex:0 0 auto;
+    border:1px solid var(--gold); background:var(--gold-tint); color:#5F4708;
+    border-radius:999px; padding:10px 18px; font-weight:600; font-size:12.5px;
+    cursor:pointer; white-space:nowrap; box-shadow:var(--shadow);
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  .epToggleBtn:hover{background:#F3E7C4}
+  .epToggleBtn i{font-style:normal; font-size:9px; transition:transform .15s}
+  .epToggleBtn[aria-expanded="true"]{background:var(--ink); border-color:var(--ink); color:#fff}
+  .epToggleBtn[aria-expanded="true"] i{transform:rotate(180deg)}
+  @media (max-width:900px){
+    #page-export .kpis.eppinned{flex-direction:column; align-items:stretch; gap:10px}
+    .epToggleBtn{justify-content:center; width:100%}
+  }
+  @media (max-width:640px){
+    #page-export .kpis.eppinned{padding:10px 2px 8px}
+  }
+
+  /* ============================================================
+     Export Plan — the full table (always visible) and the
+     collapsible pie/buttons visualization
+     ------------------------------------------------------------
+     .eppie-wrap (the full 7-column table — Project, Project Name,
+     P/N, Qty, Ship Date, Value in US$, Remarks — still built by
+     renderPieList/.eppie-listscroll) and its filter bar
+     (#epCardFiltersSection) are always on screen, right under the
+     KPI band. Only the P/N↔Project breakdown — .eppie-vizwrap, with
+     its Chart/Buttons toggle — is collapsed by default
+     (#epViewBlock[hidden]), revealed by the .epToggleBtn in the KPI
+     row. Both #epPieChart and #epPieButtons render off the same
+     filtered data as the table (state.filtered), so opening the
+     visualization never needs a re-render or loses a pick.
+
+     A project can legitimately span several *different* source
+     records (not just one record's several P/N lines) — those two
+     cases render differently. P/N lines from the *same* source
+     record (see renderPieList/flattenItems' recKey) are a sub-group
+     sharing one merged Value cell, since it's genuinely one figure.
+     Different records within the same project keep their own
+     separate values, with a thin `.epsl-sep` line marking the
+     boundary between them. Either way the whole project group still
+     reads as one colored block via `.epsl-frame`, and every cell
+     keeps the same data-group/data-project/data-pn wiring the pie/
+     buttons pick and hover interactions depend on (see the JS).
+
+     The table has no height cap / internal scrollbar by default — it
+     grows to fit its rows, and the page itself is the only scrolling
+     surface (one scrollbar, not two). Only once the viz panel is
+     opened (`#epDash.vizOpen`, toggled alongside #epViewBlock's
+     `hidden` attribute) does the table go back into a bounded,
+     internally-scrolling box (`height:var(--eppie-h)` +
+     `.eppie-listscroll{overflow-y:auto}`) — otherwise an already-tall
+     table plus a full-height chart/buttons panel below it would make
+     the page enormous.
+     ============================================================ */
+  .eppie-wrap{
+    margin-top:0;
+    --eppie-h:560px;
+    display:flex; flex-direction:column;
+  }
+  #epDash.vizOpen .eppie-wrap{ height:var(--eppie-h); min-height:0; }
+  #epDash.vizOpen .eppie-listscroll{ flex:1; min-height:0; overflow-y:auto; }
+  .eppie-vizwrap{
+    margin-top:16px;
+    --eppie-h:480px;
+    display:flex; flex-direction:column; height:var(--eppie-h);
+    padding:14px 20px 10px;
+  }
+  .eppie-chart-head{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    flex:0 0 auto; margin-bottom:12px; flex-wrap:wrap;
+  }
+  .eppie-toggle,.eppie-viewtoggle{flex:0 0 auto}
+  /* Chart view: fills whatever box is left in the column after the head
+     row — both eppie-chart and its svg are sized 100%/100% of that box
+     (not a fixed max-width), and the SVG's own viewBox aspect ratio +
+     default preserveAspectRatio="xMidYMid meet" does the "fit without
+     distorting" part, so the donut is always as big as the available
+     space allows. Buttons view: a scrollable grid in the same box,
+     shown instead of (never alongside) the chart — see
+     wirePieViewToggle. */
+  .eppie-chartscroll{flex:1 1 auto; min-height:0; display:flex; justify-content:center; align-items:center; overflow:hidden}
+  .eppie-chart{width:100%; height:100%; display:flex; justify-content:center; align-items:center}
+  .eppie-chart svg{display:block; width:100%; height:100%}
+  .eppie-chart path{cursor:pointer; outline:none}
+  .eppie-chart path.picked{stroke:var(--ink); stroke-width:3px}
+  .eppie-buttons{
+    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
+    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+    align-content:start; padding:2px;
+  }
+  .eppie-btn{
+    display:flex; align-items:center; gap:6px; min-width:0;
+    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; padding:7px 9px; font-size:11.5px; color:var(--ink-2);
+    cursor:pointer; text-align:left; font-family:inherit;
+    transition:background .12s, border-color .12s, box-shadow .12s;
+  }
+  .eppie-btn:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
+  .eppie-btn.picked{
+    border-width:3px; border-color:var(--ink);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+    box-shadow:0 2px 8px rgba(18,22,28,.22);
+    font-weight:700; color:var(--ink);
+  }
+  .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
+  .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+  /* The full 7-column data table (always visible, direct child of
+     .eppie-wrap) — still built from renderPieList/.eppie-listscroll (the
+     old always-visible item list), just with three more columns and no
+     cell merging. */
+  .epsl-head{
+    display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:8px;
+    padding:10px 14px; border-bottom:1px solid var(--line); flex:0 0 auto;
+    font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--faint);
+  }
+  .epsl-head .epsl-qty,.epsl-head .epsl-val{text-align:right}
+  .eppie-listscroll{
+    scrollbar-width:thin; position:relative;
+    display:grid; grid-template-columns:1fr 1.5fr 1fr .6fr .95fr 1fr 1.7fr; gap:0 8px;
+    padding:0 14px; align-content:start;
+  }
+  .eppie-listscroll .empty{grid-column:1/-1}
+  /* The outline is drawn as an outward box-shadow "ring", not a real
+     border. A real border sits flush with the row's own box edge — the
+     same pixels a highlighted/hovered .epsl-cell's opaque fill covers,
+     since each cell (painted after the frame, so on top of it) is
+     exactly as tall as its row. That made the top/bottom edge of the
+     frame look sliced into short dashes, visible only in the column
+     gutters the cells don't reach. A box-shadow spreads *outside* the
+     frame's own box — into the blank .epsl-gap strip between groups, or
+     the list's own side padding — where no cell ever paints, so the
+     ring stays one unbroken line regardless of which cells above it are
+     filled in.
+   */
+  .epsl-frame{
+    box-shadow:0 0 0 1.5px color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; pointer-events:none;
+    transition:background .12s, box-shadow .12s;
+  }
+  .epsl-frame.grouphover{box-shadow:0 0 0 1.5px var(--frame-color); background:color-mix(in srgb, var(--frame-color) 14%, white)}
+  /* Selected (.hl) uses the *same visual language* as a picked pie slice
+     or Buttons-view button (.eppie-chart path.picked / .eppie-btn.picked)
+     — a solid black frame, not another shade of the group's own color —
+     so "this is selected" reads identically everywhere, and unmistakably
+     (a black border reads as "chosen" regardless of the group's own
+     color, where a same-hue-but-stronger tint could still read as "just
+     a bit more of the same idle framing"). The color fill stays tinted
+     in the group's own color underneath, so identity is still visible.
+     Two box-shadows stack: the 3px solid "border" ring first, the soft
+     drop shadow second.
+   */
+  .epsl-frame.hl{
+    box-shadow:0 0 0 3px var(--ink), 0 2px 8px rgba(18,22,28,.22);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+  }
+  .epsl-cell{
+    display:flex; align-items:center; min-width:0; cursor:pointer;
+    padding:7px 0; font-size:12.5px;
+    transition:background .12s, font-weight .12s;
+  }
+  .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 12%, white)}
+  .epsl-cell.hl{background:color-mix(in srgb, var(--frame-color, var(--gold)) 32%, white); font-weight:700; color:var(--ink)}
+  /* A blank spacer row between groups (see renderPieList) — an explicit
+     sized grid item, not a grid row-gap, since a uniform row-gap would
+     also open a gap *within* a group, between its own member rows. */
+  .epsl-gap{display:block; height:7px; grid-column:1/-1}
+  /* A thin line *within* a group, between two of its member rows — a
+     project can span several source records with their own date/value
+     each, so unlike the old merged-cell behavior every row shows its
+     own figures, and this is what still marks "these rows are one
+     group" between them. Same explicit-sized-grid-item technique as
+     .epsl-gap, tinted with the group's own color; pointer-events:none
+     since it's a pure visual divider, never a click/hover target. */
+  .epsl-sep{display:block; height:1px; grid-column:1/-1; pointer-events:none; background:color-mix(in srgb, var(--frame-color, var(--line-strong)) 40%, white)}
+  .epsl-proj{grid-column:1}
+  .epsl-pname{grid-column:2}
+  .epsl-pn{grid-column:3}
+  .epsl-qty{grid-column:4; justify-content:flex-end; font-variant-numeric:tabular-nums; color:var(--ink)}
+  .epsl-date{grid-column:5; font-variant-numeric:tabular-nums; color:var(--ink-2); white-space:nowrap}
+  .epsl-val{grid-column:6; justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
+  .epsl-val.neg{color:var(--rose)}
+  /* A left "bracket" cueing that this figure spans more than one row —
+     several P/N lines that came from the very same source record (see
+     renderPieList/flattenItems' recKey) share one Value, so it's shown
+     once, vertically centered (.epsl-cell's own align-items:center) over
+     its merged grid-row span, rather than repeated on every line. */
+  .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
+  .epsl-remarks{grid-column:7; color:var(--ink-2); white-space:normal; overflow-wrap:anywhere; line-height:1.35}
+  .epsl-proj,.epsl-pname,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
+  .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
+
+  @media (max-width:1180px){
+    .eppie-wrap{--eppie-h:480px}
+    .eppie-vizwrap{--eppie-h:420px}
+  }
+  @media (max-width:640px){
+    .eppie-wrap{--eppie-h:420px}
+    .eppie-vizwrap{--eppie-h:340px; padding:12px 12px 8px}
+    /* 7 columns don't fit a phone screen at readable size — rather than
+       crush the text unreadably small, the table scrolls horizontally
+       within its own box (min-width holds every column at a legible
+       size); .epsl-head and .eppie-listscroll are both plain block
+       children of the overflow-x:auto .eppie-wrap, so they scroll in
+       lockstep without any extra JS to keep them in sync. */
+    .eppie-wrap{overflow-x:auto}
+    .epsl-head,.eppie-listscroll{min-width:640px}
+    .epsl-head{padding-left:12px; padding-right:12px}
+    .eppie-listscroll{padding:0 12px}
+    .eppie-buttons{grid-template-columns:repeat(3,1fr)}
+    .eppie-btn{font-size:11px; padding:6px 7px}
+  }
+
+  /* ============================================================
+     Export Plan — filter bar for the always-visible table
+     ------------------------------------------------------------
+     Reuses Project Report's .filters/.cb/.pop/.opt/.chips
+     components verbatim. Sits directly above .eppie-wrap, both
+     always on screen (unlike .eppie-vizwrap, which is collapsed by
+     default). Sticky, stacked directly under the KPI band (#epKpis
+     is itself sticky at top:var(--epHeaderH)) so the filters stay
+     reachable no matter how far the table scrolls. `--epKpisH` (set
+     by epSyncKpisHeight, mirroring epSyncHeaderHeight for the header
+     itself) is the KPI band's real rendered height, kept in sync via
+     ResizeObserver since it isn't a fixed number — the band reflows
+     at the 1180px/640px breakpoints and its own toggle button can
+     wrap onto a second line on narrow widths.
+     `#page-export #epCardFiltersSection` (two ids, specificity 2,0,0)
+     is what actually wins the `top` property over
+     `#page-export .filters` (one id + one class, 1,1,0 — otherwise
+     the *more* specific rule despite looking less specific at a
+     glance) — without matching that prefix, `top` would silently
+     revert to `var(--epHeaderH)` alone, sticking the filter bar
+     under the header instead of under the KPI band, overlapping it.
+     ============================================================ */
+  #page-export #epCardFiltersSection{
+    position:sticky; z-index:49;
+    top:calc(var(--epHeaderH, 56px) + var(--epKpisH, 150px));
+    margin-top:0;
+  }
+  /* Clear all sits on the same row as the filter fields themselves,
+     not the chips row below — #epCardFgrid (an id, so it wins over the
+     shared .fgrid class rule regardless of breakpoint) hands its own
+     padding to the wrapping .fgridrow instead, so the row's edges line
+     up with the panel padding exactly as .fgrid's used to on its own.
+     Bottom padding is real (not left at 0 to lean on .chips's own
+     padding) so the fields have room to breathe below them even when
+     there's no active filter and .chips is empty (display:none) — with
+     only .fgridrow's own edge to fall back on, the panel used to end
+     flush against the field boxes. #epCardChips gets its own top
+     margin for the same reason, so an active filter's chip doesn't sit
+     jammed right under the dropdowns. */
+  .fgridrow{display:flex; align-items:flex-end; gap:12px; padding:16px 18px 20px}
+  #epCardFgrid{padding:0; flex:1; min-width:0}
+  #epCardChips{margin-top:8px; padding-bottom:18px}
+  @media (max-width:640px){
+    .fgridrow{flex-direction:column; align-items:stretch; padding:14px 14px 16px; gap:12px}
+  }
