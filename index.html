@@ -410,9 +410,13 @@
 
   /* Export Plan's own header sits at a different height than Project
      Report's, so its sticky filter bar tracks a separate CSS variable
-     (--epHeaderH) instead of the shared --headerH. */
+     (--epHeaderH) instead of the shared --headerH — and, since the
+     filter bar itself sticks *below* the KPI band rather than directly
+     under the header (see #page-export #epCardFiltersSection further
+     down), the mobile expanded-panel's height budget has to subtract
+     the band's height too, not just the header's. */
   #page-export .filters{top:var(--epHeaderH, 56px)}
-  #page-export .filters.mExpanded .fpanel{max-height:calc(100vh - var(--epHeaderH, 56px) - 90px)}
+  #page-export .filters.mExpanded .fpanel{max-height:calc(100vh - var(--epHeaderH, 56px) - var(--epKpisH, 150px) - 90px)}
 
   /* ============================================================
      Export Plan — KPI row pinned under the header, with the
@@ -467,13 +471,15 @@
      visualization never needs a re-render or loses a pick.
 
      A project can legitimately span several *different* source
-     rows (not just one row's several P/N lines), so every row in
-     the table keeps its own Ship Date and Value — nothing is
-     merged across a group's rows; a thin `.epsl-sep` line is drawn
-     between the rows of a multi-row group instead, since those
-     figures usually differ within a group. The group still reads
-     as one colored block via `.epsl-frame`, and every cell keeps
-     the same data-group/data-project/data-pn wiring the pie/
+     records (not just one record's several P/N lines) — those two
+     cases render differently. P/N lines from the *same* source
+     record (see renderPieList/flattenItems' recKey) are a sub-group
+     sharing one merged Value cell, since it's genuinely one figure.
+     Different records within the same project keep their own
+     separate values, with a thin `.epsl-sep` line marking the
+     boundary between them. Either way the whole project group still
+     reads as one colored block via `.epsl-frame`, and every cell
+     keeps the same data-group/data-project/data-pn wiring the pie/
      buttons pick and hover interactions depend on (see the JS).
 
      The table has no height cap / internal scrollbar by default — it
@@ -616,6 +622,12 @@
   .epsl-date{grid-column:5; font-variant-numeric:tabular-nums; color:var(--ink-2); white-space:nowrap}
   .epsl-val{grid-column:6; justify-content:flex-end; font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink)}
   .epsl-val.neg{color:var(--rose)}
+  /* A left "bracket" cueing that this figure spans more than one row —
+     several P/N lines that came from the very same source record (see
+     renderPieList/flattenItems' recKey) share one Value, so it's shown
+     once, vertically centered (.epsl-cell's own align-items:center) over
+     its merged grid-row span, rather than repeated on every line. */
+  .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
   .epsl-remarks{grid-column:7; color:var(--ink-2); white-space:normal; overflow-wrap:anywhere; line-height:1.35}
   .epsl-proj,.epsl-pname,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
   .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
@@ -647,24 +659,32 @@
      Reuses Project Report's .filters/.cb/.pop/.opt/.chips
      components verbatim. Sits directly above .eppie-wrap, both
      always on screen (unlike .eppie-vizwrap, which is collapsed by
-     default) — it still needs to opt out of the shared mobile rule
-     that makes any .filters sticky under the header (that rule
-     assumes it's the page's first section, which it isn't here).
+     default). Sticky, stacked directly under the KPI band (#epKpis
+     is itself sticky at top:var(--epHeaderH)) so the filters stay
+     reachable no matter how far the table scrolls. `--epKpisH` (set
+     by epSyncKpisHeight, mirroring epSyncHeaderHeight for the header
+     itself) is the KPI band's real rendered height, kept in sync via
+     ResizeObserver since it isn't a fixed number — the band reflows
+     at the 1180px/640px breakpoints and its own toggle button can
+     wrap onto a second line on narrow widths.
+     `#page-export #epCardFiltersSection` (two ids, specificity 2,0,0)
+     is what actually wins the `top` property over
+     `#page-export .filters` (one id + one class, 1,1,0 — otherwise
+     the *more* specific rule despite looking less specific at a
+     glance) — without matching that prefix, `top` would silently
+     revert to `var(--epHeaderH)` alone, sticking the filter bar
+     under the header instead of under the KPI band, overlapping it.
      ============================================================ */
-  #epCardFiltersSection{margin-top:0}
+  #page-export #epCardFiltersSection{
+    position:sticky; z-index:49;
+    top:calc(var(--epHeaderH, 56px) + var(--epKpisH, 150px));
+    margin-top:0;
+  }
+  .frow2{display:flex; align-items:flex-start; gap:12px; padding:0 16px 14px}
+  .frow2 .chips{flex:1; min-width:0; padding:0}
+  .frow2 #epCardClearAll{flex:0 0 auto}
   @media (max-width:640px){
-    /* #page-export .filters{top:var(--epHeaderH,56px)} (id+class, higher
-       specificity than a bare #epCardFiltersSection selector) would
-       otherwise still win the `top` property here even though
-       position:relative no longer means "sticky offset" — leaving the
-       section visually shifted down by --epHeaderH while the *next*
-       sibling (.eppie-wrap) lays out from its unshifted flow position,
-       so the two would visibly overlap. Matching that selector's own
-       #page-export prefix is what actually wins the tie. */
-    #page-export #epCardFiltersSection{
-      position:relative; top:auto; margin-top:0;
-      border-top:1px solid var(--line); border-radius:10px;
-    }
+    .frow2{padding:0 12px 12px}
   }
 </style>
 </head>
@@ -862,10 +882,6 @@
     <div class="rule kpiRule"></div>
 
     <section class="filters" id="epCardFiltersSection">
-      <div class="head">
-        <div class="eyebrow">Filter this table</div>
-        <button class="btn ghost" id="epCardClearAll">Clear all</button>
-      </div>
       <button type="button" class="mfbar" id="epCardMfToggle" aria-expanded="false" aria-controls="epCardFpanel">
         <span class="mfLabel">Filters</span>
         <span class="badge" id="epCardMfCount" hidden>0</span>
@@ -873,7 +889,10 @@
       </button>
       <div class="fpanel" id="epCardFpanel">
         <div class="fgrid" id="epCardFgrid"></div>
-        <div class="chips" id="epCardChips"></div>
+        <div class="frow2">
+          <div class="chips" id="epCardChips"></div>
+          <button class="btn ghost" id="epCardClearAll">Clear all</button>
+        </div>
       </div>
     </section>
 
@@ -2964,26 +2983,30 @@ function renderPieChart(slices, total, mode){
 function flattenItems(recs){
   var out = [];
   recs.forEach(function(r){
+    var recKey = r._sheet + "|" + r._row;
     if (!r.items.length){
-      out.push({ project:r.projectNo, projectName:r.projectName, pn:"", qty:null, shipDate:r.shipDate, value:r.value, remarks:r.remarks });
+      out.push({ project:r.projectNo, projectName:r.projectName, pn:"", qty:null, shipDate:r.shipDate, value:r.value, remarks:r.remarks, recKey:recKey });
     } else {
       r.items.forEach(function(it){
-        out.push({ project:r.projectNo, projectName:r.projectName, pn:it.pn, qty:it.qty, shipDate:r.shipDate, value:r.value, remarks:r.remarks });
+        out.push({ project:r.projectNo, projectName:r.projectName, pn:it.pn, qty:it.qty, shipDate:r.shipDate, value:r.value, remarks:r.remarks, recKey:recKey });
       });
     }
   });
   return out;
 }
-// Consecutive rows sharing a project get one visible frame (`.epsl-frame`),
-// tinted in its own project color via the `--frame-color` custom property
-// (set inline here, consumed by the CSS for the frame itself and for its
-// cells' hover/hl backgrounds), so the whole group reads as one colored
-// block — including a group of one, which just doesn't need a divider.
-// Unlike an early version of this table, nothing is merged across a
-// group's rows: a project can span several distinct source records, each
-// with its own ship date and value, so every row always shows its own
-// figures — a thin `.epsl-sep` line is drawn between a group's member
-// rows instead, as the only thing marking "these still belong together".
+// Two levels of grouping. Outer: consecutive rows sharing a project get
+// one visible frame (`.epsl-frame`), tinted in its own project color via
+// the `--frame-color` custom property — the whole group reads as one
+// colored block, including a group of one. Inner: within that, rows that
+// came from the very same *source* record (`recKey` — see §4.2, a P/N
+// cell can hold several newline-separated part numbers that all share
+// one Ship Date/Value) are a sub-group with one shared, merged Value
+// cell instead of repeating the same figure on every P/N line. A project
+// spanning *several different* source records still shows each record's
+// own value — only P/N lines that are genuinely the same record's ever
+// merge — and a thin `.epsl-sep` line marks the boundary between two
+// sub-groups (never drawn *within* one, since those rows share a figure
+// rather than differing).
 function renderPieList(recs){
   var host = document.getElementById("epPieList");
   var items = flattenItems(recs);
@@ -2998,27 +3021,53 @@ function renderPieList(recs){
   while (i < items.length){
     var j = i;
     while (j + 1 < items.length && items[j+1].project === items[i].project) j++;
-    var groupLen = j - i + 1, span = groupLen * 2 - 1;
+    var groupLen = j - i + 1;
     var groupPns = items.slice(i, j + 1).map(function(it){ return it.pn; }).join("|");
     var color = colorMap.get(items[i].project) || "var(--slate)";
     var colorStyle = "--frame-color:" + color;
-    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'" style="grid-row:'+gridRow+' / span '+span+'; grid-column:1/-1; '+colorStyle+'"></span>');
-    for (var k = i; k <= j; k++){
-      var it = items[k], r = gridRow + (k - i) * 2;
-      var attrs = 'style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'"';
-      out.push(
-        '<span class="epsl-cell epsl-proj mono" '+attrs+'>' +
-          '<i class="epsl-swatch" style="background:'+color+'"></i>' + esc(it.project || "—") +
-        '</span>' +
-        '<span class="epsl-cell epsl-pname" '+attrs+'>'+esc(it.projectName || "—")+'</span>' +
-        '<span class="epsl-cell epsl-pn mono" '+attrs+'>'+esc(it.pn || "—")+'</span>' +
-        '<span class="epsl-cell epsl-qty" '+attrs+'>'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>' +
-        '<span class="epsl-cell epsl-date" '+attrs+'>'+(it.shipDate==null?"—":fmtDate(it.shipDate))+'</span>' +
-        '<span class="epsl-cell epsl-val'+(it.value<0?" neg":"")+'" '+attrs+'>'+money(it.value)+'</span>' +
-        '<span class="epsl-cell epsl-remarks" '+attrs+'>'+esc(it.remarks || "")+'</span>'
-      );
-      if (k < j) out.push('<span class="epsl-sep" style="grid-row:'+(r+1)+'; '+colorStyle+'"></span>');
+
+    var subGroups = [];
+    var k = i;
+    while (k <= j){
+      var m = k;
+      while (m + 1 <= j && items[m+1].recKey === items[k].recKey) m++;
+      subGroups.push([k, m]);
+      k = m + 1;
     }
+    var span = groupLen + (subGroups.length - 1); // + one row per inter-subgroup separator
+    out.push('<span class="epsl-frame" data-group="'+groupIdx+'" data-project="'+esc(items[i].project)+'" data-pn="'+esc(groupPns)+'" style="grid-row:'+gridRow+' / span '+span+'; grid-column:1/-1; '+colorStyle+'"></span>');
+
+    var row = gridRow;
+    subGroups.forEach(function(sg, sgIdx){
+      var a = sg[0], b = sg[1], subLen = b - a + 1, subStart = row;
+      for (var idx = a; idx <= b; idx++){
+        var it = items[idx], r = row + (idx - a);
+        var attrs = 'style="grid-row:'+r+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(it.project)+'" data-pn="'+esc(it.pn)+'"';
+        out.push(
+          '<span class="epsl-cell epsl-proj mono" '+attrs+'>' +
+            '<i class="epsl-swatch" style="background:'+color+'"></i>' + esc(it.project || "—") +
+          '</span>' +
+          '<span class="epsl-cell epsl-pname" '+attrs+'>'+esc(it.projectName || "—")+'</span>' +
+          '<span class="epsl-cell epsl-pn mono" '+attrs+'>'+esc(it.pn || "—")+'</span>' +
+          '<span class="epsl-cell epsl-qty" '+attrs+'>'+(it.qty==null?"—":nfInt.format(it.qty))+'</span>' +
+          '<span class="epsl-cell epsl-date" '+attrs+'>'+(it.shipDate==null?"—":fmtDate(it.shipDate))+'</span>'
+        );
+      }
+      var first = items[a], subPns = items.slice(a, b + 1).map(function(it){ return it.pn; }).join("|");
+      var mergedAttrs = 'style="grid-row:'+subStart+' / span '+subLen+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(first.project)+'" data-pn="'+esc(subPns)+'"';
+      out.push(
+        '<span class="epsl-cell epsl-val'+(first.value<0?" neg":"")+(subLen>1?" merged":"")+'" '+mergedAttrs+'>'+money(first.value)+'</span>'
+      );
+      for (var idx2 = a; idx2 <= b; idx2++){
+        out.push('<span class="epsl-cell epsl-remarks" style="grid-row:'+(row+(idx2-a))+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(items[idx2].project)+'" data-pn="'+esc(items[idx2].pn)+'">'+esc(items[idx2].remarks || "")+'</span>');
+      }
+      row += subLen;
+      if (sgIdx < subGroups.length - 1){
+        out.push('<span class="epsl-sep" style="grid-row:'+row+'; '+colorStyle+'"></span>');
+        row += 1;
+      }
+    });
+
     gridRow += span;
     groupIdx++;
     i = j + 1;
@@ -3426,6 +3475,19 @@ function epSyncHeaderHeight(){
 new ResizeObserver(epSyncHeaderHeight).observe(epTopbar);
 window.addEventListener("resize", epSyncHeaderHeight);
 epSyncHeaderHeight();
+
+// The filter bar is sticky right under the KPI band (see
+// #page-export #epCardFiltersSection in the CSS), so it also needs the
+// band's *real* height, not a guessed constant — the band reflows at the
+// 1180/640px breakpoints and its own reveal button can wrap onto a
+// second line on narrow widths.
+var epKpis = document.getElementById("epKpis");
+function epSyncKpisHeight(){
+  document.documentElement.style.setProperty("--epKpisH", epKpis.offsetHeight + "px");
+}
+new ResizeObserver(epSyncKpisHeight).observe(epKpis);
+window.addEventListener("resize", epSyncKpisHeight);
+epSyncKpisHeight();
 
 /* ============================================================
    12. Remember the last file — IndexedDB, works on iPhone too.
