@@ -960,6 +960,246 @@ Three unrelated requests addressed together:
   the frame's own outline plus the `.epsl-gap` spacer between groups is
   the only separation this list needs.
 
+### 5.11 Tenth round: cards are gone, one full table replaces them, the whole block collapses behind a KPI-row button
+
+The biggest structural change since the August 2026 redesign (§5.2). Three
+requests, addressed together because they all touch the same block:
+
+- **The card list (§5.1/§5.3's "bottom (full) table") is deleted outright**
+  — `#epList`, `renderCard`, `renderList`, `renderCount`, `#epRowCount`,
+  `#epLoadMore`/`#epLoadMoreWrap`, `state.visibleCount`, `PAGE_SIZE`, and
+  every `.eplist`/`.epcard`/`.epc-*`/`.epitem*`/`.epchip`/`.epmeta` CSS
+  rule are gone. Fields that only ever rendered on a card — Priority,
+  Type, License, Oven, Tech, Notes1, Delivery risk — currently have no
+  UI anywhere on this page; that's an accepted, explicit trade of this
+  round, not an oversight.
+- **The old always-visible item list (§5.2–§5.10 — Project/P·N/Qty/Value,
+  `#epPieList`) *is* now the Table view.** The bar-chart "Table" view
+  added in §5.10 (`renderPieTable`, `#epPieTable`, `.eppt-*`) is deleted;
+  `renderPieList` (kept, still the same grouping/coloring engine) grows
+  from 4 columns to 7 — **Project, Project Name, P/N, Qty, Ship Date,
+  Value in US$, Remarks** — and moves into `#epPieTableView`, one of the
+  three panes `#epPieViewToggle` switches between (the other two, Chart
+  and Buttons, are unchanged). The second, always-visible list column and
+  its drag resizer (`.eppie-list-col`, `#epPieResizer`, `wireEppieResizer`,
+  `.eppie-grid`) are gone entirely — there's only one column now, and the
+  Table/Chart/Buttons pane renders at the full width the two columns used
+  to split between them.
+- **Nothing is merged across a group's rows anymore.** §5.4 merged the
+  Value cell for consecutive same-project rows on the assumption that
+  "same project" meant "one record's several P/N lines," which really did
+  share one date/value. That assumption doesn't hold for this table: a
+  project can now legitimately span several *different* source records,
+  each with its own ship date and value (the flattened row's `shipDate`/
+  `value`/`remarks`/`projectName` all now come from `flattenItems`, which
+  carries every one of those fields per row instead of just
+  `project`/`pn`/`qty`/`value`). So every row always shows its own
+  figures, and a thin `.epsl-sep` line (a spacer grid row, same technique
+  as the existing `.epsl-gap` between groups, tinted with the group's own
+  `--frame-color`) is drawn between a group's member rows instead — the
+  frame still marks the group as one colored block, the separator marks
+  where one row's figures end and the next one's begin.
+- **`recompute()`'s sort changed from "whole list by ship date" to
+  "grouped by project, ship-date order inside each group, groups ordered
+  by their own earliest ship date."** This was forced by the point above:
+  once the table's grouping-by-project is meant to catch *any* same-
+  project rows (not just ones the source sheet happened to keep adjacent),
+  sorting `state.filtered` purely by date could interleave an unrelated
+  project's row between two rows of the same project, silently splitting
+  what should have been one visual group into two. Verified with a
+  synthetic case (P100 at Sept 1 and Sept 15, P400 at Sept 10 — a date
+  that sits *between* them): P100's four rows still render as one
+  unbroken group ahead of P400, not split around it.
+- **The filter bar moved from above the deleted card list to above
+  `.eppie-wrap`**, and **now actually filters what it sits above.**
+  Previously (§5.3) it was a deliberate, explicit split: the filter bar
+  drove `state.filters`/`state.filtered`, which fed the KPI band and the
+  card list, while the pie/list/buttons always read the whole sheet
+  (`activeSheet().rows`), untouched by any filter. That split no longer
+  makes sense once the filter bar sits directly above the Table/Chart/
+  Buttons block instead of a separate list further down the page —
+  `renderPie()` now builds its slices/table/chart/buttons from
+  `state.filtered` instead. One knock-on fix this required:
+  `pieShowSlice`'s money-total (the donut's center-label second line) was
+  still summing over `activeSheet().rows` — harmless before, since the
+  chart itself was already filter-independent, but now inconsistent with
+  the chart's own (now filtered) slice quantities. Fixed to sum over
+  `state.filtered` too, so a picked slice's qty/%/money always agree.
+- **A new button in the KPI row — `#epToggleViewBtn`, "Table · Chart ·
+  Buttons" — shows or hides the whole block** (filter bar + `.eppie-wrap`,
+  wrapped together in `#epViewBlock`), hidden by default (`#epViewBlock`
+  starts with the `hidden` attribute in the markup, not toggled by any
+  JS on load). `render()` still populates everything inside it regardless
+  of visibility, so revealing it is instant, never a re-render. The KPI
+  band itself is restructured to make room for the button in the same
+  row: `#epKpis` (`.kpis.eppinned`, still the sticky-under-header element)
+  is now a flex bar, and the five KPI cards render into a nested
+  `#epKpiCards` div that keeps the plain `.kpis` class — and therefore
+  every one of that class's existing responsive rules — untouched, so
+  Project Report's own KPI row (which has no such wrapper) is unaffected.
+- **A real specificity bug, found while testing the mobile layout.** The
+  filter bar's `@media (max-width:640px){ #epCardFiltersSection{
+  position:relative; top:auto; … } }` override (added in §5.3, back when
+  a small downward shift here was harmless because nothing sat flush
+  against it) stopped fully working once `.eppie-wrap` became its
+  immediate next sibling: `#page-export .filters{ top:var(--epHeaderH,
+  56px) }` is an id+class selector (specificity 1,1,0), which beats a
+  bare `#epCardFiltersSection` id selector (1,0,0) — so `top` stayed at
+  `var(--epHeaderH)` (≈56–69px) even though `position` correctly became
+  `relative`. A `position:relative` element's own reserved flow space is
+  unaffected by its `top` offset, so the *next* sibling (`.eppie-wrap`)
+  still laid out immediately below the filter bar's unshifted flow
+  position — while the filter bar itself rendered ~60px lower, visibly
+  overlapping the table underneath it (surfaced in a screenshot as what
+  looked like a duplicated, ghost-colored toggle button, which was
+  actually the real `#epPieToggle`/`#epPieViewToggle` pills showing
+  through from underneath). Fixed by matching the winning selector's own
+  `#page-export` prefix: `#page-export #epCardFiltersSection{ top:auto }`
+  (2,0,0) beats `#page-export .filters` (1,1,0) outright.
+- **The 7-column table scrolls horizontally on narrow screens instead of
+  crushing text.** Seven columns — including a free-text Remarks column —
+  can't render at a legible size in a ~360px content width no matter how
+  the column `fr` ratios are tuned. `.epsl-head` and `.eppie-listscroll`
+  get a `min-width:640px` under the existing 640px breakpoint, and their
+  parent (`.eppie-tablecol`) becomes `overflow-x:auto`; since both are
+  plain block children of that one scrolling container (not independently
+  scrolled), they scroll in lockstep with no header-sync JS needed. The
+  page body itself never scrolls horizontally — only this one box does.
+
+Net effect (superseded within the same day — see §5.12): this round's
+first version hid the filter bar and the table behind the reveal button
+too, alongside Chart/Buttons. That wasn't what was asked for.
+
+### 5.12 Eleventh round: only the pie/buttons visualization collapses — the table and its filters stay on screen
+
+Same-day correction to §5.11: the request was for the table (with its
+filter bar) to always be visible, right under the KPI row — only the
+P/N↔Project breakdown (the donut or the button grid) should be behind the
+reveal button, alongside its own two toggles (P/N↔Project and Chart↔
+Buttons).
+
+- **`#epCardFiltersSection` and `.eppie-wrap` (the table) moved back out
+  of `#epViewBlock`** to sit directly after the KPI row's rule, always
+  rendered. `#epViewBlock` now wraps only a single `.panel.eppie-vizwrap`
+  — the old `.eppie-chart-col` content (the P/N/Project toggle, the
+  Chart/Buttons toggle, and `#epPieChart`/`#epPieButtons`) — and that's
+  the only thing the KPI-row button shows or hides.
+- **"Table" is no longer one of the toggle's options** — there's nothing
+  left for it to switch to, since the table isn't part of this panel
+  anymore. `#epPieViewToggle` is back to a plain two-way Chart/Buttons
+  toggle (mirroring the P/N/Project toggle it sits beside), and
+  `wirePieViewToggle`'s `views` map dropped its `table` entry. The
+  button's own label changed from "Table · Chart · Buttons" to "Chart ·
+  Buttons" to match.
+- **CSS split accordingly**: `.eppie-wrap` (the table's panel) now owns
+  the flex-column/height/scroll behavior directly — no more
+  `.eppie-tablecol` wrapper div, since the table is the *only* content of
+  that panel now, not one of three panes sharing a box with a chart and a
+  button grid. `.eppie-vizwrap` (renamed from `.eppie-chart-col`) keeps
+  that behavior for the collapsible panel instead. Both get their own
+  `--eppie-h` (the table taller by default, 560/480/420px across the
+  three breakpoints, than the viz panel's 480/420/340px) since they're
+  independent panels now, not sized off one shared variable.
+- Net effect, corrected: the Export Plan page's default view (once a
+  file is loaded) is the KPI row, the filter bar, and the full table —
+  all three always on screen, exactly as before this round started. Only
+  the pie/buttons breakdown is one click away.
+
+### 5.13 Twelfth round: fewer filters, and one scroll instead of two
+
+Same-day follow-up:
+
+- **`FILTER_COLS` dropped `tech`, `priority` and `type`** — the filter
+  bar is down to Project #, Customer/project, P/N and Ship date.
+  `facetValues`' `tech` special-case is unreachable now but harmless
+  (nothing calls it with that key anymore); left alone rather than
+  ripped out for a one-line behavior that costs nothing to keep.
+- **The table no longer has its own fixed height / internal scrollbar
+  by default.** §5.11/§5.12 gave `.eppie-wrap` a permanent
+  `height:var(--eppie-h)` with `.eppie-listscroll{overflow-y:auto}` —
+  fine with 5 test rows, but with a real sheet (tens of rows) it meant
+  **two** scrollbars at once: the page's own, and a second one inside a
+  ~560px box showing only a third of the table — which is what read as
+  the table "starting too low" with rows looking clipped at the box's
+  bottom edge. Fixed by making the bounded/internally-scrolling box
+  conditional: `.eppie-wrap` is just `display:flex;flex-direction:column`
+  (height auto, grows to fit every row) unless `#epDash` carries a new
+  `vizOpen` class, in which case `#epDash.vizOpen .eppie-wrap{
+  height:var(--eppie-h) }` and `#epDash.vizOpen .eppie-listscroll{ flex:1;
+  overflow-y:auto }` restore the exact previous behavior.
+  `epToggleViewBtn`'s click handler toggles `vizOpen` on `#epDash` in
+  lockstep with `#epViewBlock.hidden`, so the table is only ever bounded
+  while the chart/buttons panel is open beneath it — the two together
+  fitting in a saner total page height was the point of the box in the
+  first place, and with the panel collapsed there's nothing below the
+  table competing for room, so letting it grow full-height and page-
+  scroll once is strictly better than a second, mostly-empty-looking
+  scrollbar. Verified with a synthetic 30-row sheet: collapsed, the
+  table's `scrollHeight === clientHeight` (no internal scrollbar) and
+  the page scrolls once; opening the panel puts it back to a 560px box
+  with `scrollHeight > clientHeight` (internal scroll again); closing
+  reverts it.
+
+### 5.14 Thirteenth round: sticky filter bar, no more filter header row, and merging back the same-record P/N lines
+
+Three more requests, same day:
+
+- **`#epCardFiltersSection`'s `.head` row (the "Filter this table" eyebrow
+  + the old Clear-all button) is gone.** Clear all now lives in a new
+  `.frow2` row directly under `.fgrid` (the field dropdowns), alongside
+  `.chips` — `.frow2{display:flex}` with `.chips{flex:1}` means the chip
+  list fills the left side and Clear all sits pinned to the right edge
+  whether or not any chips are actually rendered (an empty `.chips` just
+  collapses via the existing `.chips:empty{display:none}` rule, which
+  doesn't affect the button's position since it isn't relying on
+  `justify-content` to place it).
+- **The filter bar is now sticky, stacked directly under the KPI band.**
+  `#page-export #epCardFiltersSection{ position:sticky; top:calc(
+  var(--epHeaderH,56px) + var(--epKpisH,150px)) }` — two ids (2,0,0) is
+  what's needed to beat `#page-export .filters{ top:var(--epHeaderH) }`
+  (1,1,0), the same specificity trap documented in §5.12. `--epKpisH` is
+  a new sibling to `--epHeaderH`: `epSyncKpisHeight()` mirrors
+  `epSyncHeaderHeight()`, a `ResizeObserver` on `#epKpis` keeping the
+  variable equal to the KPI band's *real* rendered height (it reflows at
+  the 1180/640px breakpoints, so a hardcoded number would drift). The
+  old mobile-only `#page-export #epCardFiltersSection{position:relative;
+  top:auto}` override from §5.12 — needed back when sticking here caused
+  an overlap with `.eppie-wrap` — is gone; that was a symptom of the
+  table being wrongly inside the same collapsible block as the filters,
+  fixed properly in §5.12 itself, so the override was already inert
+  dead weight by this point. `.filters.mExpanded .fpanel`'s mobile
+  max-height budget also now subtracts `--epKpisH` alongside
+  `--epHeaderH`, since the expanded dropdown has to fit under *both*
+  sticky bars, not just the header.
+- **P/N lines from the same source record merge again — but now
+  correctly scoped.** §5.11 removed all cell-merging because a project
+  can span several *different* source records with genuinely different
+  dates/values (§5.10's original bug: the old merge logic keyed off
+  "same project," which conflated that with "same record"). The
+  complaint this round was the opposite case: two P/N lines that *are*
+  the same record (the classic §4.2 scenario — one Excel row's P/N cell
+  holding several newline-separated part numbers) were now showing the
+  identical Value repeated once per line, which is exactly the
+  redundancy the original merge feature existed to avoid.
+  `flattenItems` tags each flattened row with `recKey` (`r._sheet +
+  "|" + r._row` — the record's own provenance fields, already unique
+  since only one sheet is ever parsed). `renderPieList` groups twice
+  now: the outer pass is unchanged (consecutive same-project rows, one
+  `.epsl-frame`); a new inner pass splits each outer group into
+  sub-groups of consecutive rows sharing one `recKey`. A sub-group's
+  Value cell renders once, spanning its rows (`.epsl-val.merged`, a
+  revived version of §5.4's merged-cell CSS, now scoped correctly). A
+  `.epsl-sep` divider is drawn *only between sub-groups* — never within
+  one, since a sub-group's rows share a figure rather than differing.
+  Ship Date and Remarks deliberately stay per-row, unmerged — same
+  record-level ownership as Value, but the request specifically and
+  repeatedly called out only "the price" as what should be shown once,
+  so only Value was touched, to avoid guessing at unrequested scope.
+  Verified against a synthetic project with 5 P/Ns split 2-and-3 across
+  two source rows: two merged Value cells ($ for the 2, $ for the 3),
+  exactly one separator between them, and the 2/3 split preserved in
+  Qty/Remarks/Ship Date shown per line.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
