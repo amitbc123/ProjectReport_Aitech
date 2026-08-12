@@ -525,13 +525,25 @@
     padding:0 14px; align-content:start;
   }
   .eppie-listscroll .empty{grid-column:1/-1}
+  /* The outline is drawn as an outward box-shadow "ring", not a real
+     border. A real border sits flush with the row's own box edge — the
+     same pixels a highlighted/hovered .epsl-cell's opaque fill covers,
+     since each cell (painted after the frame, so on top of it) is
+     exactly as tall as its row. That made the top/bottom edge of the
+     frame look sliced into short dashes, visible only in the column
+     gutters the cells don't reach. A box-shadow spreads *outside* the
+     frame's own box — into the blank .epsl-gap strip between groups, or
+     the list's own side padding — where no cell ever paints, so the
+     ring stays one unbroken line regardless of which cells above it are
+     filled in.
+   */
   .epsl-frame{
-    border:1.5px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    box-shadow:0 0 0 1.5px color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
     background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
     border-radius:6px; pointer-events:none;
-    transition:background .12s, border-color .12s, box-shadow .12s;
+    transition:background .12s, box-shadow .12s;
   }
-  .epsl-frame.grouphover{border-color:var(--frame-color); background:color-mix(in srgb, var(--frame-color) 14%, white)}
+  .epsl-frame.grouphover{box-shadow:0 0 0 1.5px var(--frame-color); background:color-mix(in srgb, var(--frame-color) 14%, white)}
   /* Selected (.hl) uses the *same visual language* as a picked pie slice
      or Buttons-view button (.eppie-chart path.picked / .eppie-btn.picked)
      — a solid black frame, not another shade of the group's own color —
@@ -540,15 +552,22 @@
      color, where a same-hue-but-stronger tint could still read as "just
      a bit more of the same idle framing"). The color fill stays tinted
      in the group's own color underneath, so identity is still visible.
+     Two box-shadows stack: the 3px solid "border" ring first, the soft
+     drop shadow second.
    */
   .epsl-frame.hl{
-    border-width:3px; border-color:var(--ink);
+    box-shadow:0 0 0 3px var(--ink), 0 2px 8px rgba(18,22,28,.22);
     background:color-mix(in srgb, var(--frame-color) 32%, white);
-    box-shadow:0 2px 8px rgba(18,22,28,.22);
   }
+  /* No border-bottom here on purpose: a per-row divider used to be drawn
+     on every cell, including the internal rows of a multi-row group,
+     which visually cut the group's own .epsl-frame into segments instead
+     of it reading as one unified block. The frame's own border plus the
+     .epsl-gap spacer between groups is all the separation this list
+     needs. */
   .epsl-cell{
     display:flex; align-items:center; min-width:0; cursor:pointer;
-    padding:7px 0; font-size:12.5px; border-bottom:1px solid #F4F5F7;
+    padding:7px 0; font-size:12.5px;
     transition:background .12s, font-weight .12s;
   }
   .epsl-cell.grouphover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 12%, white)}
@@ -620,6 +639,41 @@
   }
   .eppie-btn i{width:8px; height:8px; border-radius:2px; flex:0 0 8px; background:var(--frame-color)}
   .eppie-btn span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+  /* Table view (default): one horizontal bar per P/N or Project (whichever
+     the P/N ↔ Project toggle currently selects), bar length encoding its
+     summed money value — same axis convention as a normal bar chart, X
+     = money, Y = the category rows. Rows sorted by value, largest first,
+     like the buttons/frame the color scheme reused from. */
+  .eppie-table{
+    width:100%; height:100%; overflow-y:auto; scrollbar-width:thin;
+    display:flex; flex-direction:column; gap:6px; padding:2px;
+  }
+  .eppt-row{
+    display:grid; grid-template-columns:minmax(70px,1fr) 2fr auto; align-items:center; gap:10px;
+    border:1px solid color-mix(in srgb, var(--frame-color, var(--line-strong)) 45%, white);
+    background:color-mix(in srgb, var(--frame-color, transparent) 6%, white);
+    border-radius:6px; padding:7px 10px; font-size:11.5px; color:var(--ink-2);
+    cursor:pointer; text-align:left; font-family:inherit; width:100%;
+    transition:background .12s, border-color .12s, box-shadow .12s;
+  }
+  .eppt-row:hover{background:color-mix(in srgb, var(--frame-color, var(--gold)) 14%, white)}
+  .eppt-row.picked{
+    border-width:3px; border-color:var(--ink);
+    background:color-mix(in srgb, var(--frame-color) 32%, white);
+    box-shadow:0 2px 8px rgba(18,22,28,.22);
+    font-weight:700; color:var(--ink);
+  }
+  .eppt-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .eppt-bartrack{height:10px; border-radius:4px; background:color-mix(in srgb, var(--line) 70%, white); overflow:hidden}
+  .eppt-bar{display:block; height:100%; border-radius:4px; background:var(--frame-color, var(--gold)); min-width:3px}
+  .eppt-bar.neg{background:var(--rose)}
+  .eppt-val{font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); text-align:right; min-width:64px}
+  .eppt-val.neg{color:var(--rose)}
+  @media (max-width:640px){
+    .eppt-row{grid-template-columns:minmax(56px,.8fr) 1.4fr auto; gap:7px; padding:6px 8px; font-size:11px}
+    .eppt-val{min-width:52px}
+  }
 
   @media (max-width:1180px){
     .eppie-grid{--eppie-h:360px}
@@ -860,12 +914,14 @@
               <button type="button" data-mode="project" aria-pressed="false">Project</button>
             </div>
             <div class="segmented eppie-viewtoggle" id="epPieViewToggle" role="group" aria-label="View as">
-              <button type="button" data-view="chart" aria-pressed="true">Chart</button>
+              <button type="button" data-view="table" aria-pressed="true">Table</button>
+              <button type="button" data-view="chart" aria-pressed="false">Chart</button>
               <button type="button" data-view="buttons" aria-pressed="false">Buttons</button>
             </div>
           </div>
           <div class="eppie-chartscroll">
-            <div class="eppie-chart" id="epPieChart"></div>
+            <div class="eppie-table" id="epPieTable"></div>
+            <div class="eppie-chart" id="epPieChart" hidden></div>
             <div class="eppie-buttons" id="epPieButtons" hidden></div>
           </div>
         </div>
@@ -2349,20 +2405,13 @@ bootstrap();
    ============================================================ */
 (function(){
 "use strict";
-var PAGE_KEY = "aitech.activePage";
 var pages = { report: document.getElementById("page-report"), export: document.getElementById("page-export") };
 
-function current(){
-  var v = null;
-  try{ v = localStorage.getItem(PAGE_KEY); }catch(e){}
-  return v === "export" ? "export" : "report";
-}
 function other(p){ return p === "report" ? "export" : "report"; }
 
 function show(page){
   pages.report.hidden = page !== "report";
   pages.export.hidden = page !== "export";
-  try{ localStorage.setItem(PAGE_KEY, page); }catch(e){}
 }
 function go(page){ show(page); }
 
@@ -2373,7 +2422,12 @@ function go(page){ show(page); }
   document.getElementById(id).addEventListener("click", function(){ go("report"); });
 });
 
-show(current());
+// Project Report is always the page shown on a fresh load — no longer
+// remembered across reloads via localStorage (that "last used page"
+// behavior was a nice-to-have, not a request, and it meant a session
+// spent on Export Plan would silently reopen there next time instead of
+// on the intended default).
+show("report");
 })();
 </script>
 
@@ -2859,6 +2913,9 @@ function pieSetPickedClass(idx, on){
   var btnHost = document.getElementById("epPieButtons");
   var btn = btnHost && btnHost.querySelector('.eppie-btn[data-idx="'+idx+'"]');
   if (btn) btn.classList.toggle("picked", on);
+  var tblHost = document.getElementById("epPieTable");
+  var row = tblHost && tblHost.querySelector('.eppt-row[data-idx="'+idx+'"]');
+  if (row) row.classList.toggle("picked", on);
 }
 function pieTogglePick(idx){
   if (idx < 0 || idx >= pieState.slices.length) return;
@@ -3050,6 +3107,38 @@ function renderPieButtons(slices){
     b.addEventListener("click", function(){ pieTogglePick(+b.dataset.idx); });
   });
 }
+// Default view: one horizontal bar per slice (X = summed money value, Y =
+// the P/N or Project rows themselves — whichever the mode toggle has
+// selected), sorted largest value first. Reuses sliceMoneyTotal (already
+// built for the donut's center label) so a slice's bar and its chart/
+// buttons-view money figure always agree. Rows keep the slice's own
+// `idx` (into the unsorted `slices` array, same indexing pieState and
+// pieTogglePick use) as data-idx, since the table's own display order is
+// by value, not the slices array's by-qty order.
+function renderPieTable(slices, recs, mode){
+  var host = document.getElementById("epPieTable");
+  if (!slices.length){
+    host.innerHTML = '<div class="empty"><b>Nothing to show</b>No quantities in this sheet.</div>';
+    return;
+  }
+  var rows = slices.map(function(sl, idx){
+    return { idx:idx, key:sl.key, color:sl.color, value:sliceMoneyTotal(recs, mode, sl) };
+  });
+  rows.sort(function(a, b){ return b.value - a.value; });
+  var max = rows.reduce(function(m, r){ return Math.max(m, Math.abs(r.value)); }, 0) || 1;
+  host.innerHTML = rows.map(function(r){
+    var neg = r.value < 0;
+    var pct = Math.max(2, Math.abs(r.value) / max * 100);
+    return '<button type="button" class="eppt-row" data-idx="'+r.idx+'" style="--frame-color:'+r.color+'" title="'+esc(r.key)+'">' +
+      '<span class="eppt-label">'+esc(r.key)+'</span>' +
+      '<span class="eppt-bartrack"><span class="eppt-bar'+(neg?" neg":"")+'" style="width:'+pct+'%"></span></span>' +
+      '<span class="eppt-val'+(neg?" neg":"")+'">'+money(r.value)+'</span>' +
+    '</button>';
+  }).join("");
+  host.querySelectorAll(".eppt-row").forEach(function(b){
+    b.addEventListener("click", function(){ pieTogglePick(+b.dataset.idx); });
+  });
+}
 function renderPie(){
   // Always the whole sheet, in its own row order — not state.filtered
   // (that's the bottom table's filtered/date-sorted view, see §8).
@@ -3059,6 +3148,7 @@ function renderPie(){
   var total = slices.reduce(function(s, x){ return s + Math.max(0, x.qty); }, 0);
   renderPieChart(slices, total, state.pieMode);
   renderPieButtons(slices);
+  renderPieTable(slices, recs, state.pieMode);
 }
 function wirePieToggle(){
   var box = document.getElementById("epPieToggle");
@@ -3077,15 +3167,13 @@ wirePieToggle();
 // other, so switching views never needs a re-render or loses pick state.
 function wirePieViewToggle(){
   var box = document.getElementById("epPieViewToggle");
-  var chartEl = document.getElementById("epPieChart");
-  var buttonsEl = document.getElementById("epPieButtons");
+  var views = { table: document.getElementById("epPieTable"), chart: document.getElementById("epPieChart"), buttons: document.getElementById("epPieButtons") };
   box.querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){
       if (b.getAttribute("aria-pressed") === "true") return;
       box.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
-      var isChart = b.dataset.view === "chart";
-      chartEl.hidden = !isChart;
-      buttonsEl.hidden = isChart;
+      var view = b.dataset.view;
+      Object.keys(views).forEach(function(k){ views[k].hidden = k !== view; });
     });
   });
 }
