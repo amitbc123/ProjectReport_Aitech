@@ -1105,6 +1105,41 @@ Buttons).
   all three always on screen, exactly as before this round started. Only
   the pie/buttons breakdown is one click away.
 
+### 5.13 Twelfth round: fewer filters, and one scroll instead of two
+
+Same-day follow-up:
+
+- **`FILTER_COLS` dropped `tech`, `priority` and `type`** — the filter
+  bar is down to Project #, Customer/project, P/N and Ship date.
+  `facetValues`' `tech` special-case is unreachable now but harmless
+  (nothing calls it with that key anymore); left alone rather than
+  ripped out for a one-line behavior that costs nothing to keep.
+- **The table no longer has its own fixed height / internal scrollbar
+  by default.** §5.11/§5.12 gave `.eppie-wrap` a permanent
+  `height:var(--eppie-h)` with `.eppie-listscroll{overflow-y:auto}` —
+  fine with 5 test rows, but with a real sheet (tens of rows) it meant
+  **two** scrollbars at once: the page's own, and a second one inside a
+  ~560px box showing only a third of the table — which is what read as
+  the table "starting too low" with rows looking clipped at the box's
+  bottom edge. Fixed by making the bounded/internally-scrolling box
+  conditional: `.eppie-wrap` is just `display:flex;flex-direction:column`
+  (height auto, grows to fit every row) unless `#epDash` carries a new
+  `vizOpen` class, in which case `#epDash.vizOpen .eppie-wrap{
+  height:var(--eppie-h) }` and `#epDash.vizOpen .eppie-listscroll{ flex:1;
+  overflow-y:auto }` restore the exact previous behavior.
+  `epToggleViewBtn`'s click handler toggles `vizOpen` on `#epDash` in
+  lockstep with `#epViewBlock.hidden`, so the table is only ever bounded
+  while the chart/buttons panel is open beneath it — the two together
+  fitting in a saner total page height was the point of the box in the
+  first place, and with the panel collapsed there's nothing below the
+  table competing for room, so letting it grow full-height and page-
+  scroll once is strictly better than a second, mostly-empty-looking
+  scrollbar. Verified with a synthetic 30-row sheet: collapsed, the
+  table's `scrollHeight === clientHeight` (no internal scrollbar) and
+  the page scrolls once; opening the panel puts it back to a 560px box
+  with `scrollHeight > clientHeight` (internal scroll again); closing
+  reverts it.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
