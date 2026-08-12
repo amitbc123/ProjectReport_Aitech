@@ -684,11 +684,19 @@
      not the chips row below — #epCardFgrid (an id, so it wins over the
      shared .fgrid class rule regardless of breakpoint) hands its own
      padding to the wrapping .fgridrow instead, so the row's edges line
-     up with the panel padding exactly as .fgrid's used to on its own. */
-  .fgridrow{display:flex; align-items:flex-end; gap:12px; padding:14px 16px 0}
+     up with the panel padding exactly as .fgrid's used to on its own.
+     Bottom padding is real (not left at 0 to lean on .chips's own
+     padding) so the fields have room to breathe below them even when
+     there's no active filter and .chips is empty (display:none) — with
+     only .fgridrow's own edge to fall back on, the panel used to end
+     flush against the field boxes. #epCardChips gets its own top
+     margin for the same reason, so an active filter's chip doesn't sit
+     jammed right under the dropdowns. */
+  .fgridrow{display:flex; align-items:flex-end; gap:12px; padding:16px 18px 20px}
   #epCardFgrid{padding:0; flex:1; min-width:0}
+  #epCardChips{margin-top:8px; padding-bottom:18px}
   @media (max-width:640px){
-    .fgridrow{flex-direction:column; align-items:stretch; padding:12px 12px 0; gap:10px}
+    .fgridrow{flex-direction:column; align-items:stretch; padding:14px 14px 16px; gap:12px}
   }
 </style>
 </head>
