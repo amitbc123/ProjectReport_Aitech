@@ -3,8 +3,8 @@
    state.filters/state.filtered drive the whole Table/Chart/
    Buttons block (§7 filter bar, §6 pie/list, KPI band) — they all
    report filtered-vs-total from the same two. */
-import { BLANK } from './columns.js';
-import { fmtDate } from './format.js';
+import { BLANK } from './columns.js?v=20260813';
+import { fmtDate } from './format.js?v=20260813';
 
 export var state = {
   fileName:"", sheet:null, pieMode:"pn",

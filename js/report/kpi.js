@@ -1,6 +1,6 @@
 /* Project Report — 8. KPI band */
-import { state, sheet } from './state.js';
-import { nfInt, money, esc, pct } from './format.js';
+import { state, sheet } from './state.js?v=20260813';
+import { nfInt, money, esc, pct } from './format.js?v=20260813';
 
 export function totalsOf(rows){
   var t = { ext:0, qty:0, done:0, n:rows.length, proj:new Set(), po:new Set() };

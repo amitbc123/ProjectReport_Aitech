@@ -3,8 +3,8 @@
    toDate() (in format.js, via finishRow) already understands.
    Uses the vendored SheetJS global (window.XLSX) loaded by
    vendor/xlsx.full.min.js before this module runs. */
-import { COLS, SHEET_ORDER } from './columns.js';
-import { clean, finishRow } from './format.js';
+import { COLS, SHEET_ORDER } from './columns.js?v=20260813';
+import { clean, finishRow } from './format.js?v=20260813';
 
 export function parseExcelBinary(u8){
   if (typeof XLSX === "undefined") throw new Error("NO_XLSX");

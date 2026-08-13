@@ -1,13 +1,13 @@
 /* Project Report — 16. File intake */
-import { SHEET_ORDER } from './columns.js';
-import { esc, nfInt } from './format.js';
-import { state } from './state.js';
-import { parseSpreadsheetML } from './parse-xml.js';
-import { parseExcelBinary } from './parse-xlsx.js';
-import { switchSheet, render } from './render.js';
-import { renderFilterBar, closeOpenPopup } from './filter-bar.js';
-import { paintRows } from './table.js';
-import { cacheFile } from './folder-autoload.js';
+import { SHEET_ORDER } from './columns.js?v=20260813';
+import { esc, nfInt } from './format.js?v=20260813';
+import { state } from './state.js?v=20260813';
+import { parseSpreadsheetML } from './parse-xml.js?v=20260813';
+import { parseExcelBinary } from './parse-xlsx.js?v=20260813';
+import { switchSheet, render } from './render.js?v=20260813';
+import { renderFilterBar, closeOpenPopup } from './filter-bar.js?v=20260813';
+import { paintRows } from './table.js?v=20260813';
+import { cacheFile } from './folder-autoload.js?v=20260813';
 
 var dropscreen = document.getElementById("dropscreen");
 var loading    = document.getElementById("loading");
@@ -164,6 +164,15 @@ document.addEventListener("click", function(e){
     filtersSection.classList.remove("mExpanded");
     mfToggle.setAttribute("aria-expanded", "false");
   }
+});
+
+/* ---------- mobile status/KPI band (collapsed by default) ---------- */
+var kpiband = document.getElementById("kpiband");
+var kpiToggle = document.getElementById("kpiToggle");
+kpiToggle.addEventListener("click", function(){
+  var open = !kpiband.classList.contains("mExpanded");
+  kpiband.classList.toggle("mExpanded", open);
+  kpiToggle.setAttribute("aria-expanded", open ? "true" : "false");
 });
 
 function syncHeaderHeight(){

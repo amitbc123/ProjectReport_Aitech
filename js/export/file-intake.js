@@ -1,10 +1,10 @@
 /* Export Plan — 11. File intake */
-import { esc, nfInt } from './format.js';
-import { state } from './state.js';
-import { parseExportWorkbook } from './rows.js';
-import { switchSheet, render } from './render.js';
-import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js';
-import { epCacheFile } from './idb-store.js';
+import { esc, nfInt } from './format.js?v=20260813';
+import { state } from './state.js?v=20260813';
+import { parseExportWorkbook } from './rows.js?v=20260813';
+import { switchSheet, render } from './render.js?v=20260813';
+import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js?v=20260813';
+import { epCacheFile } from './idb-store.js?v=20260813';
 
 var epDropscreen = document.getElementById("epDropscreen");
 var epLoading    = document.getElementById("epLoading");
@@ -118,6 +118,15 @@ epToggleViewBtn.addEventListener("click", function(){
   epViewBlock.hidden = !show;
   epToggleViewBtn.setAttribute("aria-expanded", show ? "true" : "false");
   epDash.classList.toggle("vizOpen", show);
+});
+
+/* ---------- mobile status/KPI band (collapsed by default) ---------- */
+var epKpiBand = document.getElementById("epKpis");
+var epKpiToggle = document.getElementById("epKpiToggle");
+epKpiToggle.addEventListener("click", function(){
+  var open = !epKpiBand.classList.contains("mExpanded");
+  epKpiBand.classList.toggle("mExpanded", open);
+  epKpiToggle.setAttribute("aria-expanded", open ? "true" : "false");
 });
 
 /* ---------- filter bar (Table/Chart/Buttons block): clear-all + mobile drawer ---------- */
