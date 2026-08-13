@@ -1,6 +1,6 @@
 /* Export Plan — 3. Header detection + row building */
-import { FIELD_ALIASES, FALLBACK_FULL, FALLBACK_DONE, FIXED_SHEET_ORDER } from './columns.js';
-import { clean, toNumber, toDateMs, normHeader, splitLines } from './format.js';
+import { FIELD_ALIASES, FALLBACK_FULL, FALLBACK_DONE, FIXED_SHEET_ORDER } from './columns.js?v=20260813';
+import { clean, toNumber, toDateMs, normHeader, splitLines } from './format.js?v=20260813';
 
 function findHeaderMap(aoa){
   for (var r = 0; r < Math.min(12, aoa.length); r++){

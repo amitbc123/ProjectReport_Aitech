@@ -1,8 +1,8 @@
 /* Export Plan — 9. Master render + sheet switching */
-import { state, activeSheet, recompute } from './state.js';
-import { totalsOf, renderKpis } from './kpi.js';
-import { renderCardChips } from './filter-bar.js';
-import { renderPie } from './pie.js';
+import { state, activeSheet, recompute } from './state.js?v=20260813';
+import { totalsOf, renderKpis } from './kpi.js?v=20260813';
+import { renderCardChips } from './filter-bar.js?v=20260813';
+import { renderPie } from './pie.js?v=20260813';
 
 export function render(){
   recompute();
