@@ -5,10 +5,10 @@
    this filtered a separate card list). Filtering here touches
    state.filters/state.filtered, which now feed the KPI band and
    every one of the table/chart/buttons views (§6). */
-import { BLANK } from './columns.js?v=20260819';
-import { esc, nfInt } from './format.js?v=20260819';
-import { state, FILTER_COLS } from './state.js?v=20260819';
-import { render } from './render.js?v=20260819';
+import { BLANK } from './columns.js?v=20260819b';
+import { esc, nfInt } from './format.js?v=20260819b';
+import { state, FILTER_COLS } from './state.js?v=20260819b';
+import { render } from './render.js?v=20260819b';
 
 var openPop = null;
 

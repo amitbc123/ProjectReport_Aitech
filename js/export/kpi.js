@@ -1,6 +1,6 @@
 /* Export Plan — 5. KPI */
-import { state } from './state.js?v=20260819';
-import { money, nfInt, esc } from './format.js?v=20260819';
+import { state } from './state.js?v=20260819b';
+import { money, nfInt, esc } from './format.js?v=20260819b';
 
 export function totalsOf(recs){
   var t = { value:0, qty:0, n:recs.length, proj:new Set(), pn:new Set() };

@@ -19,9 +19,9 @@
       but this vendored SheetJS build's writer only ever emits a generic
       styles.xml, so that file's cell formatting is not preserved. A toast
       says so explicitly when this path is the one that ran. */
-import { state } from './state.js?v=20260819';
-import { esc } from './format.js?v=20260819';
-import { patchRemarksIntoXlsx } from './xlsx-patch.js?v=20260819';
+import { state } from './state.js?v=20260819b';
+import { esc } from './format.js?v=20260819b';
+import { patchRemarksIntoXlsx } from './xlsx-patch.js?v=20260819b';
 
 export function hasRemarksEdits(){
   return state.remarksEdits.size > 0;
