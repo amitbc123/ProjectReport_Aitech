@@ -1,8 +1,8 @@
 /* Project Report — 13. Table (virtualized: only on-screen rows render) */
-import { COLS, ROW_H } from './columns.js?v=20260813';
-import { esc, fmtDate, money, nfInt } from './format.js?v=20260813';
-import { state, sheet, anyFilter } from './state.js?v=20260813';
-import { recompute } from './filters.js?v=20260813';
+import { COLS, ROW_H } from './columns.js?v=20260819';
+import { esc, fmtDate, money, nfInt } from './format.js?v=20260819';
+import { state, sheet, anyFilter } from './state.js?v=20260819';
+import { recompute } from './filters.js?v=20260819';
 
 var tpl = COLS.map(function(c){ return c.w + "px"; }).join(" ") + " 1fr";
 

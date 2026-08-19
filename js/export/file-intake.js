@@ -1,10 +1,10 @@
 /* Export Plan — 11. File intake */
-import { esc, nfInt } from './format.js?v=20260813';
-import { state } from './state.js?v=20260813';
-import { parseExportWorkbook } from './rows.js?v=20260813';
-import { switchSheet, render } from './render.js?v=20260813';
-import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js?v=20260813';
-import { epCacheFile } from './idb-store.js?v=20260813';
+import { esc, nfInt } from './format.js?v=20260819';
+import { state } from './state.js?v=20260819';
+import { parseExportWorkbook } from './rows.js?v=20260819';
+import { switchSheet, render } from './render.js?v=20260819';
+import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js?v=20260819';
+import { epCacheFile } from './idb-store.js?v=20260819';
 
 var epDropscreen = document.getElementById("epDropscreen");
 var epLoading    = document.getElementById("epLoading");
@@ -40,6 +40,10 @@ function epSetProgress(p, label){
 }
 function epInstall(file, parsed){
   state.fileName = file.name;
+  state.wb = parsed.wb;
+  state.sheetName = parsed.sheetName;
+  state.remarksCol = parsed.remarksCol;
+  state.remarksEdits = new Map();
   epSetProgress(1, "Building the dashboard…");
   setTimeout(function(){
     epHadData = true;
@@ -48,7 +52,8 @@ function epInstall(file, parsed){
     document.getElementById("epFilemeta").innerHTML =
       '<span class="mono">'+esc(file.name)+'</span><span class="dot"></span>'+
       '<span>'+esc(parsed.sheet.name)+'</span><span class="dot"></span>'+
-      nfInt.format(parsed.sheet.rows.length)+' rows<span class="dot"></span><span>read-only</span>';
+      nfInt.format(parsed.sheet.rows.length)+' rows'+
+      (parsed.remarksCol != null ? '<span class="dot"></span><span>Remarks are editable</span>' : '');
     renderCardFilterBar();
     switchSheet(parsed.sheet);
     epCacheFile(file);

@@ -8,9 +8,10 @@
    "N more" bucket. pieState holds the live pie's slices/geometry/
    pick so both directions of the pie↔list link (click a slice ⇄
    click a list row/group) can reach it from either render path. */
-import { BLANK } from './columns.js?v=20260813';
-import { esc, money, fmtDate, nfInt } from './format.js?v=20260813';
-import { state, anyFilter } from './state.js?v=20260813';
+import { BLANK } from './columns.js?v=20260819';
+import { esc, money, fmtDate, nfInt } from './format.js?v=20260819';
+import { state, anyFilter } from './state.js?v=20260819';
+import { updateRemarksActionRow } from './remarks-export.js?v=20260819';
 
 var SERIES_COLORS = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)","var(--series-5)","var(--series-6)","var(--series-7)"];
 var PIE_HOVER_GROW = 9;
@@ -262,6 +263,7 @@ function renderPieList(recs){
     host.innerHTML = anyFilter()
       ? '<div class="empty"><b>No rows match</b>Remove a filter, or clear them all, to see rows again.</div>'
       : '<div class="empty"><b>No rows</b>No data in this sheet.</div>';
+    updateRemarksActionRow();
     return;
   }
   var colorMap = buildProjectColorMap(recs);
@@ -306,9 +308,21 @@ function renderPieList(recs){
       out.push(
         '<span class="epsl-cell epsl-val'+(first.value<0?" neg":"")+(subLen>1?" merged":"")+'" '+mergedAttrs+'>'+money(first.value)+'</span>'
       );
-      for (var idx2 = a; idx2 <= b; idx2++){
-        out.push('<span class="epsl-cell epsl-remarks" style="grid-row:'+(row+(idx2-a))+'; '+colorStyle+'" data-group="'+groupIdx+'" data-project="'+esc(items[idx2].project)+'" data-pn="'+esc(items[idx2].pn)+'">'+esc(items[idx2].remarks || "")+'</span>');
-      }
+      // Remarks belongs to the whole source record (§4.2), same as Value —
+      // one merged, editable cell per sub-group rather than one per P/N
+      // line, so editing it once can never leave a multi-P/N record's
+      // several rendered lines showing conflicting text for what is really
+      // a single underlying cell.
+      var recKey = first.recKey;
+      var origRemarks = first.remarks || "";
+      var remarksVal = state.remarksEdits.has(recKey) ? state.remarksEdits.get(recKey) : origRemarks;
+      var remarksEdited = state.remarksEdits.has(recKey);
+      out.push(
+        '<span class="epsl-cell epsl-remarks'+(subLen>1?" merged":"")+(remarksEdited?" edited":"")+'" '+mergedAttrs+'>' +
+          '<textarea class="epsl-remarks-input" rows="1" placeholder="Add a remark…" ' +
+            'data-reckey="'+esc(recKey)+'" data-orig="'+esc(origRemarks)+'">'+esc(remarksVal)+'</textarea>' +
+        '</span>'
+      );
       row += subLen;
       if (sgIdx < subGroups.length - 1){
         out.push('<span class="epsl-sep" style="grid-row:'+row+'; '+colorStyle+'"></span>');
@@ -326,6 +340,38 @@ function renderPieList(recs){
   }
   host.innerHTML = out.join("");
   wireListInteractions(host);
+  wireRemarksEditing(host);
+  updateRemarksActionRow();
+}
+function autoGrowRemarksInput(ta){
+  ta.style.height = "auto";
+  ta.style.height = ta.scrollHeight + "px";
+}
+// Every Remarks textarea updates state.remarksEdits directly on "input" —
+// deliberately never triggers a re-render (render() rebuilds this whole
+// list's innerHTML, which would drop keystrokes mid-typing by yanking
+// focus out from under the user). The Download button's visibility is
+// kept in sync the same way, via updateRemarksActionRow() rather than a
+// full render.
+function wireRemarksEditing(host){
+  host.querySelectorAll(".epsl-remarks-input").forEach(function(ta){
+    autoGrowRemarksInput(ta);
+    // A click/mousedown inside the textarea would otherwise bubble up to
+    // the .epsl-cell click handler below and toggle the group highlight
+    // every time someone places a cursor to edit — stop it here so editing
+    // and group-picking stay two separate gestures.
+    ta.addEventListener("mousedown", function(e){ e.stopPropagation(); });
+    ta.addEventListener("click", function(e){ e.stopPropagation(); });
+    ta.addEventListener("input", function(){
+      autoGrowRemarksInput(ta);
+      var recKey = ta.dataset.reckey, orig = ta.dataset.orig || "";
+      if (ta.value === orig) state.remarksEdits.delete(recKey);
+      else state.remarksEdits.set(recKey, ta.value);
+      var cell = ta.closest(".epsl-remarks");
+      if (cell) cell.classList.toggle("edited", state.remarksEdits.has(recKey));
+      updateRemarksActionRow();
+    });
+  });
 }
 function wireListInteractions(host){
   host.querySelectorAll("[data-group]").forEach(function(el){

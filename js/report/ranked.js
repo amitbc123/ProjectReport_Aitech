@@ -1,8 +1,8 @@
 /* Project Report — 11. Ranked tables */
-import { BLANK, TODAY, MAX_RANK_ROWS } from './columns.js?v=20260813';
-import { esc, money, moneyDec, fmtDate, nfInt } from './format.js?v=20260813';
-import { state } from './state.js?v=20260813';
-import { setOnly } from './filter-bar.js?v=20260813';
+import { BLANK, TODAY, MAX_RANK_ROWS } from './columns.js?v=20260819';
+import { esc, money, moneyDec, fmtDate, nfInt } from './format.js?v=20260819';
+import { state } from './state.js?v=20260819';
+import { setOnly } from './filter-bar.js?v=20260819';
 
 function groupStats(rows, key){
   var m = new Map();

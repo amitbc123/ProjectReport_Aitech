@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project Report — Aitech</title>
-<link rel="stylesheet" href="css/base.css?v=20260813">
-<link rel="stylesheet" href="css/export-plan.css?v=20260813">
+<link rel="stylesheet" href="css/base.css?v=20260819">
+<link rel="stylesheet" href="css/export-plan.css?v=20260819">
 </head>
 <body>
 <div class="app">
@@ -179,7 +179,7 @@
       <input type="file" id="epFileInput" class="filein" accept=".xlsx,.xls">
       <div class="privacy">
         The file is read on this computer and never leaves it.<br>
-        Nothing is uploaded, stored, or sent anywhere. This view is read-only.
+        Nothing is uploaded, stored, or sent anywhere. You can add Remarks and download an updated copy — the original file is never touched.
       </div>
       <div class="switchhint">Looking for the Project Report instead? <button type="button" class="switchpage" id="switchToReportBtn2">Switch</button></div>
       <div id="epDropErr"></div>
@@ -226,6 +226,9 @@
     </section>
 
     <section class="panel eppie-wrap">
+      <div class="epsl-actionrow" id="epRemarksActionRow" hidden>
+        <button type="button" class="btn primary epsl-downloadbtn" id="epDownloadRemarksBtn">Download file with changes</button>
+      </div>
       <div class="epsl-head">
         <span class="epsl-proj">Project</span>
         <span class="epsl-pname">Project Name</span>
@@ -257,7 +260,7 @@
       </section>
     </div>
 
-    <div class="foot">Read-only view · Nothing is written back to the source file · All processing happens on this computer</div>
+    <div class="foot">Nothing is uploaded or sent anywhere · Remarks edits stay local until you download a copy · The original file is never modified</div>
   </main>
 
   </div><!-- /#page-export -->
@@ -265,11 +268,11 @@
 </div>
 
 <!-- SheetJS (Apache-2.0) is vendored locally so .xlsx / .xls can be read without any internet access. -->
-<script src="vendor/xlsx.full.min.js?v=20260813"></script>
+<script src="vendor/xlsx.full.min.js?v=20260819"></script>
 
-<script type="module" src="js/report/main.js?v=20260813"></script>
-<script type="module" src="js/router.js?v=20260813"></script>
-<script type="module" src="js/export/main.js?v=20260813"></script>
+<script type="module" src="js/report/main.js?v=20260819"></script>
+<script type="module" src="js/router.js?v=20260819"></script>
+<script type="module" src="js/export/main.js?v=20260819"></script>
 </body>
 </html>
 

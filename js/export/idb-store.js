@@ -6,8 +6,8 @@
    No folder auto-load here: unlike the daily report, the export
    plan has no fixed network path, so this only restores the last
    file a person picked by hand. */
-import { esc } from './format.js?v=20260813';
-import { epToast, epHandleFile } from './file-intake.js?v=20260813';
+import { esc } from './format.js?v=20260819';
+import { epToast, epHandleFile } from './file-intake.js?v=20260819';
 
 var IDB_NAME = "aitech-report", IDB_FILES = "files", IDB_FILEKEY = "lastFileExportPlan";
 function idbOpen(){

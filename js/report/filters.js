@@ -1,6 +1,6 @@
 /* Project Report — 7. Filtering + cross-filtered facet counts */
-import { COLS } from './columns.js?v=20260813';
-import { state, sheet, facetOf } from './state.js?v=20260813';
+import { COLS } from './columns.js?v=20260819';
+import { state, sheet, facetOf } from './state.js?v=20260819';
 
 export var FILTER_COLS = COLS.filter(function(c){ return c.filter; });
 

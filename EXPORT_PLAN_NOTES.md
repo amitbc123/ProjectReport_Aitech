@@ -1200,6 +1200,111 @@ Three more requests, same day:
   exactly one separator between them, and the 2/3 split preserved in
   Qty/Remarks/Ship Date shown per line.
 
+### 5.15 Fourteenth round: editable Remarks, and a download of the source file with just those changes
+
+The request: let someone type a Remarks note directly into the table, and
+once they've typed one, offer a button — appearing above the Remarks column
+header — that hands them a new file that's an exact copy of the source
+workbook with only the edited Remarks cells changed.
+
+- **Remarks is now a merged cell per source record, like Value, reversing
+  §5.14's explicit call to leave it per-row.** That earlier decision was
+  right for a read-only display (repeating the same text on every P/N line
+  reads fine when nothing's ever edited), but it stops being right the
+  moment the cell becomes an input: N separately-editable copies of what is
+  really one underlying field invites them silently going out of sync with
+  each other. Merging it — same `grid-row: start / span N` technique
+  `renderPieList` already uses for Value, keyed off the same sub-group
+  `recKey` — makes "one record, one Remarks cell" hold structurally, not
+  just by convention.
+- **Each merged Remarks cell is a `<textarea>`** (`.epsl-remarks-input`),
+  not a `contenteditable` span — predictable value semantics (`.value`,
+  no stray `<br>`/`&nbsp;` normalization quirks contenteditable is known
+  for) mattered more here than matching `.epsl-cell`'s markup exactly.
+  Styled to look like plain text at rest (transparent border/background)
+  and only reveal itself as an input on hover/focus, auto-growing its
+  height to fit typed content (`autoGrowRemarksInput`, called on render and
+  on every `input` event) so a multi-line remark doesn't clip.
+- **Typing never triggers a re-render.** `render()` rebuilds
+  `#epPieList`'s entire `innerHTML`, which would yank focus out from under
+  someone mid-keystroke. `wireRemarksEditing`'s `input` handler instead
+  writes straight into `state.remarksEdits` (a `Map`, recKey → edited
+  text, cleared on every new file load) and updates just that cell's
+  `.edited` class and the Download button's visibility directly — the Map
+  is what actually gets read from when the list *does* eventually
+  re-render (a filter change, a sort), so an edit survives that without
+  needing to be re-applied.
+- **A real correctness bug had to be fixed first: `_row` (each record's
+  provenance row index, used nowhere before this) didn't equal the
+  worksheet's actual row number.** `parseSheet` builds its row array via
+  `XLSX.utils.sheet_to_json(ws, {header:1, blankrows:false})` —
+  `blankrows:false` (deliberately set, to keep the "Old"/"OPEN ISSUE WITH
+  R&D" headerless-sheet fallback probes in §4.1 from tripping over a
+  leading blank row) skips every fully-blank row from the *output array*,
+  silently shifting every following row's array index off by however many
+  blank rows preceded it. Harmless while `_row` was only ever used inside
+  a `recKey` string for DOM bookkeeping (any stable, unique value would've
+  done) — turns into real data corruption once `_row` is used as half of
+  the literal cell address a Remarks edit gets written to: a single blank
+  row anywhere above the target row would silently send the edit into the
+  wrong cell, possibly overwriting an unrelated one. Fixed by switching to
+  `blankrows:true`, which keeps every row (blank ones included, as empty
+  arrays) so the array index is always the true 0-based sheet row; blank
+  rows still contribute nothing to the parsed output, since `buildRecord`
+  already discards any row without a Project # (§4.3). Verified with a
+  synthetic workbook carrying a deliberate blank row directly under the
+  header: the edited record's row in the downloaded file landed exactly
+  where it should have, one row below where the pre-fix index would have
+  pointed.
+- **The Download button sits in its own row, `#epRemarksActionRow`, styled
+  with the exact same grid-template-columns as `.epsl-head` so it lands
+  precisely over the Remarks column** — "above the Remarks header,"
+  literally. `hidden` by default and toggled by
+  `remarks-export.js`'s `updateRemarksActionRow()`, called after every list
+  render and after every Remarks keystroke, so it can never show with zero
+  pending edits or stay hidden with one pending.
+- **The download itself never touches the original `File`/on-disk file —
+  it hands back a brand-new one.** `state.wb` (the whole workbook object
+  `XLSX.read` produced when the file was loaded — every sheet, not just
+  the parsed current one) is left untouched until the moment Download is
+  clicked; at that point `applyRemarksEdits` walks `state.remarksEdits`
+  and, for each entry, writes the new text into `wb.Sheets[sheet][addr]`
+  (an empty string deletes the cell rather than leaving a stray `""`),
+  then `XLSX.write(wb, {bookType:"xlsx", cellStyles:true})` re-serializes
+  the *whole* workbook — every other sheet and every other cell coming
+  through exactly as parsed. `cellStyles` was off at read time before this
+  (`XLSX.read(..., {cellStyles:false})`) since nothing needed style
+  fidelity in a read-only view; turned on at both read and write now, so
+  the round-tripped file keeps as much of the source formatting as
+  SheetJS's writer supports — not pixel-perfect (conditional formatting,
+  data validation and a few other Excel features aren't represented in
+  SheetJS's object model at all, community-edition limitation, not
+  something this change can fix), but "everything but the edited cells,
+  unchanged" for what SheetJS *does* model. The downloaded filename is the
+  source name with `_updated` inserted before a `.xlsx` extension, so it
+  can never collide with — or be mistaken for overwriting — the original.
+- **The three "read-only" claims elsewhere on the Export Plan page were
+  updated to stay honest**, since Remarks genuinely isn't read-only
+  anymore: the drop-screen privacy note, the `epFilemeta` chip (was
+  literally `<span>read-only</span>`, now names the Remarks column
+  instead), and the page footer. The actual privacy guarantee underneath
+  all three — nothing is uploaded anywhere, the file never leaves the
+  browser, the *original* file on disk is never modified — didn't change
+  and is still stated plainly; only the "nothing can be edited at all"
+  framing was removed. Project Report's identical-looking copies of this
+  same text are untouched — it really is still 100% read-only there, and
+  the two pages' text lives in separate markup (see §3), so nothing here
+  could have bled across.
+- **Verified** with a synthetic workbook (`openpyxl`, three sheets besides
+  the parsed one, a multi-P/N record, a blank row right under the header)
+  driven through Playwright against the real page: the merged cell shows
+  one textarea per record (not one per P/N line); editing it shows/hides
+  the Download button correctly; the downloaded file opens with the edited
+  text in exactly the right cell, the un-edited records' Remarks
+  untouched, every other column of the edited row byte-identical to the
+  source, and all three untouched sheets (`Done`, `OPEN ISSUE WITH R&D`,
+  `Old`) still present. Zero console/page errors.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
@@ -1313,3 +1418,14 @@ regression to sneak in, so it was worth the extra check.
 - The pie caps at 7 explicit slices + one "N more" slice; there's no way to
   expand "N more" to see what's folded into it beyond scrolling the item
   list beside it, which isn't filtered to match.
+- Remarks (§5.15) is the only column that's editable, and only Remarks
+  cells get written back — every other column is display-only, on purpose
+  (that's the whole point of matching the source file "exact... with the
+  changes"). Formatting fidelity on the downloaded file is whatever
+  SheetJS's writer can carry from what it parsed (`cellStyles:true`) —
+  fonts/colors/borders generally survive, but conditional formatting, data
+  validation, and a few other Excel features it doesn't model at all won't
+  appear in the download. A Remarks edit is only ever written into the
+  parsed *current* sheet — there's no UI to edit `Done`/`OPEN ISSUE WITH
+  R&D`/`Old`, since those sheets are never parsed into records in the first
+  place (§4.1).

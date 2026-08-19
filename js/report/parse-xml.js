@@ -6,8 +6,8 @@
    ss:Index on rows and cells is still honoured, because a future
    Excel export may legitimately omit empty cells.
    No DOMParser: 36 MB would build roughly 1.5M nodes. */
-import { COLS, SHEET_ORDER } from './columns.js?v=20260813';
-import { clean, finishRow } from './format.js?v=20260813';
+import { COLS, SHEET_ORDER } from './columns.js?v=20260819';
+import { clean, finishRow } from './format.js?v=20260819';
 
 function attr(tag, name){
   var i = tag.indexOf(name + "=\"");
