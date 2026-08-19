@@ -219,24 +219,31 @@
   .epsl-val.merged{border-left:2px solid var(--line-strong); padding-left:8px; margin-left:-1px}
   .epsl-remarks{grid-column:7; align-items:stretch; color:var(--ink-2); white-space:normal; overflow-wrap:anywhere; line-height:1.35}
   /* One Remarks textarea per source record (merged the same way as the
-     Value cell, above — see pie.js) — styled to look like plain text at
-     rest and only reveal itself as an input on hover/focus, so a table
-     full of untouched Remarks doesn't read as a form. */
+     Value cell, above — see pie.js). Always drawn as a visible field —
+     .epsl-remarks' own align-items:stretch (not a percentage height,
+     which resolves unreliably against a CSS Grid track that's itself
+     auto-sized from this same cell's content — measured or in the
+     hundred-and-some %) makes the textarea fill essentially the whole
+     height of its row/rowspan by construction, so it reads as a real
+     input, not a thin line of text with an invisible-until-hover hitbox.
+     min-height is just a floor for the pathological case a row somehow
+     computes shorter than that; the JS auto-grow in pie.js only ever
+     grows it taller still, for content that wraps past one line. */
   .epsl-remarks-input{
-    flex:1 1 auto; width:100%; min-height:0;
-    border:1px solid transparent; border-radius:4px; background:transparent;
+    flex:1 1 auto; width:100%; min-height:24px; box-sizing:border-box;
+    border:1px solid var(--line-strong); border-radius:4px; background:var(--surface);
     resize:none; overflow:hidden; font:inherit; color:inherit;
-    padding:4px 6px; margin:-4px -6px; line-height:1.35;
+    padding:4px 6px; line-height:1.35;
   }
-  .epsl-remarks-input:hover{border-color:var(--line-strong)}
+  .epsl-remarks-input:hover{border-color:var(--gold)}
   .epsl-remarks-input:focus{
-    outline:none; border-color:var(--gold); background:var(--surface);
+    outline:none; border-color:var(--gold);
     box-shadow:0 0 0 2px var(--gold-tint);
   }
   .epsl-remarks-input::placeholder{color:var(--faint)}
-  /* A pending, undownloaded edit — the gold rule matches the button that
+  /* A pending, undownloaded edit — the gold fill matches the button that
      appears above the column header once any cell carries this class. */
-  .epsl-remarks.edited{box-shadow:inset 3px 0 0 var(--gold)}
+  .epsl-remarks.edited .epsl-remarks-input{border-color:var(--gold); background:var(--gold-tint)}
   .epsl-proj,.epsl-pname,.epsl-pn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ink-2)}
   .epsl-swatch{width:7px; height:7px; border-radius:2px; flex:0 0 7px; margin-right:7px}
   /* Sits directly above .epsl-head, sharing its exact column grid so the

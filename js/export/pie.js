@@ -343,9 +343,13 @@ function renderPieList(recs){
   wireRemarksEditing(host);
   updateRemarksActionRow();
 }
+// Never shrinks below the CSS min-height:80% floor (see export-plan.css) —
+// clearing any previous inline height lets that floor apply, and an
+// explicit taller pixel height is only set when the content genuinely
+// needs more room than the floor gives it (multi-line text).
 function autoGrowRemarksInput(ta){
-  ta.style.height = "auto";
-  ta.style.height = ta.scrollHeight + "px";
+  ta.style.height = "";
+  if (ta.scrollHeight > ta.clientHeight) ta.style.height = ta.scrollHeight + "px";
 }
 // Every Remarks textarea updates state.remarksEdits directly on "input" —
 // deliberately never triggers a re-render (render() rebuilds this whole
