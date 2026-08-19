@@ -1200,6 +1200,210 @@ Three more requests, same day:
   exactly one separator between them, and the 2/3 split preserved in
   Qty/Remarks/Ship Date shown per line.
 
+### 5.15 Fourteenth round: editable Remarks, and a download of the source file with just those changes
+
+The request: let someone type a Remarks note directly into the table, and
+once they've typed one, offer a button — appearing above the Remarks column
+header — that hands them a new file that's an exact copy of the source
+workbook with only the edited Remarks cells changed.
+
+- **Remarks is now a merged cell per source record, like Value, reversing
+  §5.14's explicit call to leave it per-row.** That earlier decision was
+  right for a read-only display (repeating the same text on every P/N line
+  reads fine when nothing's ever edited), but it stops being right the
+  moment the cell becomes an input: N separately-editable copies of what is
+  really one underlying field invites them silently going out of sync with
+  each other. Merging it — same `grid-row: start / span N` technique
+  `renderPieList` already uses for Value, keyed off the same sub-group
+  `recKey` — makes "one record, one Remarks cell" hold structurally, not
+  just by convention.
+- **Each merged Remarks cell is a `<textarea>`** (`.epsl-remarks-input`),
+  not a `contenteditable` span — predictable value semantics (`.value`,
+  no stray `<br>`/`&nbsp;` normalization quirks contenteditable is known
+  for) mattered more here than matching `.epsl-cell`'s markup exactly.
+  Styled to look like plain text at rest (transparent border/background)
+  and only reveal itself as an input on hover/focus, auto-growing its
+  height to fit typed content (`autoGrowRemarksInput`, called on render and
+  on every `input` event) so a multi-line remark doesn't clip.
+- **Typing never triggers a re-render.** `render()` rebuilds
+  `#epPieList`'s entire `innerHTML`, which would yank focus out from under
+  someone mid-keystroke. `wireRemarksEditing`'s `input` handler instead
+  writes straight into `state.remarksEdits` (a `Map`, recKey → edited
+  text, cleared on every new file load) and updates just that cell's
+  `.edited` class and the Download button's visibility directly — the Map
+  is what actually gets read from when the list *does* eventually
+  re-render (a filter change, a sort), so an edit survives that without
+  needing to be re-applied.
+- **A real correctness bug had to be fixed first: `_row` (each record's
+  provenance row index, used nowhere before this) didn't equal the
+  worksheet's actual row number.** `parseSheet` builds its row array via
+  `XLSX.utils.sheet_to_json(ws, {header:1, blankrows:false})` —
+  `blankrows:false` (deliberately set, to keep the "Old"/"OPEN ISSUE WITH
+  R&D" headerless-sheet fallback probes in §4.1 from tripping over a
+  leading blank row) skips every fully-blank row from the *output array*,
+  silently shifting every following row's array index off by however many
+  blank rows preceded it. Harmless while `_row` was only ever used inside
+  a `recKey` string for DOM bookkeeping (any stable, unique value would've
+  done) — turns into real data corruption once `_row` is used as half of
+  the literal cell address a Remarks edit gets written to: a single blank
+  row anywhere above the target row would silently send the edit into the
+  wrong cell, possibly overwriting an unrelated one. Fixed by switching to
+  `blankrows:true`, which keeps every row (blank ones included, as empty
+  arrays) so the array index is always the true 0-based sheet row; blank
+  rows still contribute nothing to the parsed output, since `buildRecord`
+  already discards any row without a Project # (§4.3). Verified with a
+  synthetic workbook carrying a deliberate blank row directly under the
+  header: the edited record's row in the downloaded file landed exactly
+  where it should have, one row below where the pre-fix index would have
+  pointed.
+- **The Download button sits in its own row, `#epRemarksActionRow`, styled
+  with the exact same grid-template-columns as `.epsl-head` so it lands
+  precisely over the Remarks column** — "above the Remarks header,"
+  literally. `hidden` by default and toggled by
+  `remarks-export.js`'s `updateRemarksActionRow()`, called after every list
+  render and after every Remarks keystroke, so it can never show with zero
+  pending edits or stay hidden with one pending.
+- **The download itself never touches the original `File`/on-disk file —
+  it hands back a brand-new one.** `state.originalBytes` (the loaded
+  file's own raw bytes, kept untouched from the moment it was read) is
+  left completely alone until the moment Download is clicked. **First
+  version of this shipped going through `XLSX.write(state.wb, {cellStyles:
+  true})` instead — see §5.16, one round later, for why that was wrong and
+  had to be replaced.** The downloaded filename is the source name with
+  `_updated` inserted before a `.xlsx` extension, so it can never collide
+  with — or be mistaken for overwriting — the original.
+- **The three "read-only" claims elsewhere on the Export Plan page were
+  updated to stay honest**, since Remarks genuinely isn't read-only
+  anymore: the drop-screen privacy note, the `epFilemeta` chip (was
+  literally `<span>read-only</span>`, now names the Remarks column
+  instead), and the page footer. The actual privacy guarantee underneath
+  all three — nothing is uploaded anywhere, the file never leaves the
+  browser, the *original* file on disk is never modified — didn't change
+  and is still stated plainly; only the "nothing can be edited at all"
+  framing was removed. Project Report's identical-looking copies of this
+  same text are untouched — it really is still 100% read-only there, and
+  the two pages' text lives in separate markup (see §3), so nothing here
+  could have bled across.
+- **Verified** with a synthetic workbook (`openpyxl`, three sheets besides
+  the parsed one, a multi-P/N record, a blank row right under the header)
+  driven through Playwright against the real page: the merged cell shows
+  one textarea per record (not one per P/N line); editing it shows/hides
+  the Download button correctly; the downloaded file opens with the edited
+  text in exactly the right cell, the un-edited records' Remarks
+  untouched, every other column of the edited row byte-identical to the
+  source, and all three untouched sheets (`Done`, `OPEN ISSUE WITH R&D`,
+  `Old`) still present. Zero console/page errors. **This round's
+  formatting-fidelity testing turned out not to be thorough enough — no
+  colored cells were in the test workbook, so the very real problem in
+  §5.16 shipped unnoticed.**
+
+### 5.16 Fifteenth round: the download was stripping every color — replaced XLSX.write with a byte-level ZIP/XML patch
+
+Immediate user feedback after §5.15 shipped: the downloaded file's colors
+were all gone. Two things needed fixing, reported and fixed together.
+
+- **Root cause: this vendored SheetJS build (js-xlsx 1.15.0, the free/
+  community edition) cannot write cell styles, full stop.** §5.15's
+  `XLSX.write(state.wb, {cellStyles:true})` reasoning — "turn cellStyles on
+  at read *and* write, so the round-tripped file keeps as much formatting
+  as the writer supports" — was wrong on the load-bearing assumption: the
+  writer doesn't have a real style-serialization path *at all* in this
+  build. `cellStyles:true` at read time does populate `cell.s` (confirmed —
+  `XLSX.read` genuinely parses fills/fonts into each cell's style object);
+  `cellStyles:true` at write time does nothing with it — the styles.xml
+  this build's writer emits is a fixed, hardcoded, near-empty stub (one
+  default "Normal" cell style, no custom fills or fonts) regardless of
+  what was read. Every fill, every font color, on every cell, came back
+  blank on every download — not a partial-fidelity gap, total loss,
+  because nothing about style writing is actually implemented here.
+  (Community-edition style *writing* has historically been limited-to-
+  absent in js-xlsx; this specific old vendored version confirms it's
+  fully absent, not partial.)
+- **Fix: stop using `XLSX.write` for the primary path entirely.** The only
+  way to hand back a file that's genuinely "the source, unchanged, plus
+  the edited Remarks cells" is to never run it through SheetJS's writer.
+  An `.xlsx` is a ZIP archive of XML parts (`js/export/xlsx-patch.js`,
+  new file): `state.originalBytes` — the loaded file's own raw bytes, now
+  kept in state instead of being discarded after parsing — gets unzipped,
+  only the one worksheet XML part for the active sheet is touched (found
+  by matching `state.sheetName` against `xl/workbook.xml`'s `<sheet
+  name="…">` list, then resolving that sheet's relationship ID through
+  `xl/_rels/workbook.xml.rels` to its actual part path — the same lookup
+  Excel itself does), and only the specific `<c>` elements for edited
+  records are rewritten, via `DOMParser`/`XMLSerializer` (not regex/string
+  splicing — real XML DOM edits, so malformed output isn't a risk): each
+  edited cell becomes an inline string (`t="inlineStr"`, `<is><t>…</t></is>`
+  — never a shared-string edit, since two unrelated cells can reference the
+  same shared-string index and mutating it in place would silently change
+  both), and its existing `s="…"` style-index attribute — the cell's only
+  link to styles.xml, i.e. its color — is left completely alone. Every
+  other part of the ZIP (`styles.xml`, `theme1.xml`, every other sheet, in
+  practice every byte this app never asked to change) is copied straight
+  through: decompressed then recompressed losslessly, so its *content* is
+  byte-identical to the source even though its *compressed* bytes differ
+  after a fresh deflate pass.
+- **No ZIP or DEFLATE library is vendored for this — the codec is native.**
+  `CompressionStream`/`DecompressionStream('deflate-raw')`, confirmed
+  present in the pre-installed headless Chromium this app is exclusively
+  verified against (`navigator.userAgent` showed Chromium 141 while
+  testing this), handle the actual compression; `xlsx-patch.js` only
+  implements the ZIP *container* format around them — central directory
+  and local file header parsing/writing, CRC32 (standard IEEE 802.3
+  table-driven implementation) — store (0) and deflate (8) methods only,
+  no zip64/spanning/encryption, which covers every `.xlsx` at the sizes
+  this app deals with.
+- **A legacy `.xls` (BIFF8/OLE compound file, not a ZIP at all — Export
+  Plan's dropzone has always accepted `.xls` alongside `.xlsx`) can't go
+  through this path.** `patchRemarksIntoXlsx` checks for the `PK` zip
+  signature up front and rejects immediately (`NOT_ZIP`) if it's missing;
+  `remarks-export.js`'s `downloadUpdatedFile` catches that specific
+  rejection and falls back to the old `XLSX.write(state.wb)` path for that
+  one case only — correct data, but (per the root cause above) that file's
+  own formatting is not preserved, and the toast says so explicitly rather
+  than silently handing over an unstyled file with no explanation. Every
+  other unexpected failure of either path shows a toast and gives up
+  cleanly, rather than downloading something silently wrong.
+- **Same feedback also flagged the Remarks field itself as "so thin it's
+  barely visible."** Two compounding causes, both in the original §5.15
+  styling: the textarea's border/background were fully transparent at
+  rest (by design, to "look like plain text until touched" — reasonable
+  for a once-in-a-while edit, but read as "is this even clickable?" in
+  practice), and the JS auto-grow (`autoGrowRemarksInput`) actively
+  *shrank* the box to `scrollHeight` on every render, collapsing empty/
+  short Remarks down to one thin content-height line with no visual chrome
+  at all. Fixed on both fronts: the textarea now always has a visible
+  border and background (`var(--line-strong)`/`var(--surface)` at rest,
+  gold on hover/focus/edited — the same gold the pending-edit indicator
+  and the Download button already use), and the auto-grow function no
+  longer forces `height:auto` before measuring — it clears any previous
+  *inline* height (letting CSS govern the resting size) and only sets an
+  explicit taller pixel height when content genuinely needs more room
+  (`scrollHeight > clientHeight`), never shrinking below what CSS gives
+  it. The resting size itself comes from `.epsl-remarks`'s existing
+  `align-items:stretch` (already present, for the merged multi-row case)
+  doing the real work — a percentage `min-height` was tried first and
+  measured to resolve unpredictably (a single-row cell came back ~66% of
+  its row, not the intended ~80%) against a CSS Grid track that's itself
+  auto-sized from this same cell's content, a circular dependency real
+  browsers resolve in ways that vary by the size of everything else in
+  that row. Stretch has no such ambiguity: the textarea fills essentially
+  the full content-box height of its cell (row height minus the cell's own
+  padding) by construction, in both the single-row and merged multi-row
+  cases, with only a small fixed-pixel `min-height` left as a floor for a
+  pathological case where a row somehow computes shorter than that.
+- **Verified**: a second synthetic workbook this time with actual colored
+  fills — a distinct solid fill per data row plus a bold white-on-gold
+  header row — driven through Playwright the same way as §5.15. Confirmed
+  with `openpyxl` reading the *downloaded* file back: zero fill mismatches
+  across every cell of the active sheet (including the un-edited rows'
+  fills and the header's font color), the edited cell's own fill
+  unchanged while its text updated, and all three untouched sheets still
+  present. `getBoundingClientRect()` on the Remarks textareas confirmed
+  they now fill their row's/rowspan's available height (a 3-line merged
+  cell measured ~82px against a ~96px three-row span; a single-row cell
+  filled its entire content-box height exactly). Zero console/page errors
+  in either pass.
+
 ## 6. Remembering the last file (Export Plan)
 
 Only the second half of Project Report's two-layer scheme (§1) applies
@@ -1313,3 +1517,19 @@ regression to sneak in, so it was worth the extra check.
 - The pie caps at 7 explicit slices + one "N more" slice; there's no way to
   expand "N more" to see what's folded into it beyond scrolling the item
   list beside it, which isn't filtered to match.
+- Remarks (§5.15, §5.16) is the only column that's editable, and only
+  Remarks cells get written back — every other column is display-only, on
+  purpose (that's the whole point of matching the source file "exact...
+  with the changes"). For a real `.xlsx` source, formatting fidelity on
+  the downloaded file is exact — see §5.16, the download is a byte-level
+  ZIP/XML patch of the source's own bytes, not a SheetJS rewrite, so
+  nothing about the file other than the edited cells' text ever changes.
+  The one exception is a legacy `.xls` source (not a ZIP, so that patch
+  path can't run at all): it falls back to `XLSX.write`, whose styling
+  fidelity is whatever this vendored SheetJS build's writer can carry —
+  in practice, none of it (§5.16's root-cause finding), which is why that
+  fallback's toast says so explicitly rather than leaving someone to
+  notice on their own. A Remarks edit is only ever written into the
+  parsed *current* sheet — there's no UI to edit `Done`/`OPEN ISSUE WITH
+  R&D`/`Old`, since those sheets are never parsed into records in the first
+  place (§4.1).

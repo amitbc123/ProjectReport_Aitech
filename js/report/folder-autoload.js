@@ -7,8 +7,8 @@
    A browser cannot read a fixed path with zero interaction, so the
    folder is chosen once and remembered; later opens auto-load when
    the browser still holds permission, otherwise one click reloads. */
-import { toast, handleFile } from './file-intake.js?v=20260813';
-import { esc } from './format.js?v=20260813';
+import { toast, handleFile } from './file-intake.js?v=20260819b';
+import { esc } from './format.js?v=20260819b';
 
 var MAIN_RE = /^ProjReport_(\d{1,2})_(\d{1,2})_(\d{4})\.xml$/i;
 

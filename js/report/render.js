@@ -1,14 +1,14 @@
 /* Project Report — 15. Master render + sheet switching */
-import { ATR_YES } from './columns.js?v=20260813';
-import { esc, nfInt } from './format.js?v=20260813';
-import { state, sheet } from './state.js?v=20260813';
-import { recompute } from './filters.js?v=20260813';
-import { totalsOf, renderKpis, renderQuality } from './kpi.js?v=20260813';
-import { renderChips } from './filter-bar.js?v=20260813';
-import { renderTimeline } from './timeline.js?v=20260813';
-import { renderRanked } from './ranked.js?v=20260813';
-import { renderStatus } from './status.js?v=20260813';
-import { renderCount, renderHeader, paintRows } from './table.js?v=20260813';
+import { ATR_YES } from './columns.js?v=20260819b';
+import { esc, nfInt } from './format.js?v=20260819b';
+import { state, sheet } from './state.js?v=20260819b';
+import { recompute } from './filters.js?v=20260819b';
+import { totalsOf, renderKpis, renderQuality } from './kpi.js?v=20260819b';
+import { renderChips } from './filter-bar.js?v=20260819b';
+import { renderTimeline } from './timeline.js?v=20260819b';
+import { renderRanked } from './ranked.js?v=20260819b';
+import { renderStatus } from './status.js?v=20260819b';
+import { renderCount, renderHeader, paintRows } from './table.js?v=20260819b';
 
 export function render(){
   recompute();

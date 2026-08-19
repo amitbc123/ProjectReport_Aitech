@@ -1,6 +1,6 @@
 /* Export Plan — 3. Header detection + row building */
-import { FIELD_ALIASES, FALLBACK_FULL, FALLBACK_DONE, FIXED_SHEET_ORDER } from './columns.js?v=20260813';
-import { clean, toNumber, toDateMs, normHeader, splitLines } from './format.js?v=20260813';
+import { FIELD_ALIASES, FALLBACK_FULL, FALLBACK_DONE, FIXED_SHEET_ORDER } from './columns.js?v=20260819b';
+import { clean, toNumber, toDateMs, normHeader, splitLines } from './format.js?v=20260819b';
 
 function findHeaderMap(aoa){
   for (var r = 0; r < Math.min(12, aoa.length); r++){
@@ -72,8 +72,17 @@ function buildRecord(arr, map, sheetName, rowIdx){
   };
 }
 function parseSheet(ws, name){
-  var aoa = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:"", blankrows:false });
-  if (!aoa.length) return { name:name, rows:[], recognized:true, skippedRaw:0 };
+  // blankrows:true (not false) is deliberate: it keeps aoa's array index
+  // identical to the worksheet's own 0-based row number for every row,
+  // including ones after a blank row. buildRecord's rowIdx becomes each
+  // record's _row, which downstream (see remarks-export.js) is used as a
+  // real cell address to write an edited Remarks value back into — with
+  // blankrows:false, a blank row anywhere above a data row would silently
+  // shift every following _row off by one and a Remarks edit would land on
+  // the wrong cell. A genuinely blank row still contributes nothing here:
+  // buildRecord already skips it via the "no Project #" check below.
+  var aoa = XLSX.utils.sheet_to_json(ws, { header:1, raw:true, defval:"", blankrows:true });
+  if (!aoa.length) return { name:name, rows:[], recognized:true, skippedRaw:0, remarksCol:null };
 
   var h = findHeaderMap(aoa), map, dataStart, recognized = true;
   if (h){
@@ -98,11 +107,18 @@ function parseSheet(ws, name){
     var rec = buildRecord(aoa[r] || [], map, name, r);
     if (rec) rows.push(rec);
   }
-  return { name:name, rows:rows, recognized:recognized, skippedRaw: recognized ? 0 : aoa.length };
+  return { name:name, rows:rows, recognized:recognized, skippedRaw: recognized ? 0 : aoa.length,
+    remarksCol: map.remarks !== undefined ? map.remarks : null };
 }
 export function parseExportWorkbook(u8){
   if (typeof XLSX === "undefined") throw new Error("NO_XLSX");
-  var wb = XLSX.read(u8, { type:"array", cellDates:false, cellStyles:false, sheetStubs:true });
+  // cellStyles:true (paired with the matching write-time option in
+  // remarks-export.js) so a Remarks edit's re-saved workbook keeps as much
+  // of the source file's cell formatting as SheetJS's writer can carry —
+  // it's off by default because it costs parse time nobody needed while
+  // this app was read-only, but a file someone's about to download again
+  // is worth spending it on.
+  var wb = XLSX.read(u8, { type:"array", cellDates:false, cellStyles:true, sheetStubs:true });
   // Only the current sheet (whichever isn't "Done" / "OPEN ISSUE WITH R&D" /
   // "Old") is shown — see EXPORT_PLAN_NOTES.md §"no other tab interests us".
   // Sorting by name alone, before parsing, means the other sheets' (the
@@ -114,5 +130,9 @@ export function parseExportWorkbook(u8){
   });
   var sheet = parseSheet(wb.Sheets[ordered[0]], ordered[0]);
   if (!sheet.recognized) throw new Error("NO_SHEETS");
-  return { sheet:sheet };
+  // wb (the whole parsed workbook, every sheet) and sheet.remarksCol (the
+  // Remarks column's index within the parsed sheet) are handed back so a
+  // Remarks edit can later be written into the exact right cell of the
+  // exact same workbook object — see remarks-export.js.
+  return { sheet:sheet, wb:wb, sheetName:ordered[0], remarksCol:sheet.remarksCol };
 }

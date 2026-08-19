@@ -3,7 +3,7 @@
    timeline, ranked, status, table, render, the two parsers, and
    folder-autoload for cacheFile). bootstrap() is the same tail call the
    original inline script ended with. */
-import './file-intake.js?v=20260813';
-import { bootstrap } from './folder-autoload.js?v=20260813';
+import './file-intake.js?v=20260819b';
+import { bootstrap } from './folder-autoload.js?v=20260819b';
 
 bootstrap();

@@ -1,10 +1,10 @@
 /* Export Plan — 11. File intake */
-import { esc, nfInt } from './format.js?v=20260813';
-import { state } from './state.js?v=20260813';
-import { parseExportWorkbook } from './rows.js?v=20260813';
-import { switchSheet, render } from './render.js?v=20260813';
-import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js?v=20260813';
-import { epCacheFile } from './idb-store.js?v=20260813';
+import { esc, nfInt } from './format.js?v=20260819b';
+import { state } from './state.js?v=20260819b';
+import { parseExportWorkbook } from './rows.js?v=20260819b';
+import { switchSheet, render } from './render.js?v=20260819b';
+import { renderCardFilterBar, closeOpenPopup } from './filter-bar.js?v=20260819b';
+import { epCacheFile } from './idb-store.js?v=20260819b';
 
 var epDropscreen = document.getElementById("epDropscreen");
 var epLoading    = document.getElementById("epLoading");
@@ -38,8 +38,13 @@ function epSetProgress(p, label){
   document.getElementById("epProgPct").textContent = Math.round(p*100) + "%";
   if (label) document.getElementById("epProgText").textContent = label;
 }
-function epInstall(file, parsed){
+function epInstall(file, u8, parsed){
   state.fileName = file.name;
+  state.originalBytes = u8;
+  state.wb = parsed.wb;
+  state.sheetName = parsed.sheetName;
+  state.remarksCol = parsed.remarksCol;
+  state.remarksEdits = new Map();
   epSetProgress(1, "Building the dashboard…");
   setTimeout(function(){
     epHadData = true;
@@ -48,7 +53,8 @@ function epInstall(file, parsed){
     document.getElementById("epFilemeta").innerHTML =
       '<span class="mono">'+esc(file.name)+'</span><span class="dot"></span>'+
       '<span>'+esc(parsed.sheet.name)+'</span><span class="dot"></span>'+
-      nfInt.format(parsed.sheet.rows.length)+' rows<span class="dot"></span><span>read-only</span>';
+      nfInt.format(parsed.sheet.rows.length)+' rows'+
+      (parsed.remarksCol != null ? '<span class="dot"></span><span>Remarks are editable</span>' : '');
     renderCardFilterBar();
     switchSheet(parsed.sheet);
     epCacheFile(file);
@@ -68,7 +74,7 @@ export function epHandleFile(file){
     var u8 = new Uint8Array(fr.result);
     epSetProgress(0.4, "Reading the Excel workbook…");
     setTimeout(function(){
-      try { epInstall(file, parseExportWorkbook(u8)); }
+      try { epInstall(file, u8, parseExportWorkbook(u8)); }
       catch (err){ epShowError(err.message, err.message); }
     }, 40);
   };

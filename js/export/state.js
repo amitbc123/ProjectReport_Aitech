@@ -3,12 +3,24 @@
    state.filters/state.filtered drive the whole Table/Chart/
    Buttons block (§7 filter bar, §6 pie/list, KPI band) — they all
    report filtered-vs-total from the same two. */
-import { BLANK } from './columns.js?v=20260813';
-import { fmtDate } from './format.js?v=20260813';
+import { BLANK } from './columns.js?v=20260819b';
+import { fmtDate } from './format.js?v=20260819b';
 
 export var state = {
   fileName:"", sheet:null, pieMode:"pn",
-  filters:{}, filtered:[], facets:{}, totals:null
+  filters:{}, filtered:[], facets:{}, totals:null,
+  // originalBytes: the loaded file's own raw bytes, unparsed — what
+  // remarks-export.js patches directly (see xlsx-patch.js) so a Remarks
+  // edit's download preserves the source's own formatting exactly, byte
+  // for byte, everywhere except the edited cells. wb: the whole parsed
+  // workbook object, kept only as a fallback for a legacy .xls source
+  // (not a ZIP, so xlsx-patch.js can't touch it) — that path re-derives
+  // the file via SheetJS's writer instead, which can't carry styles
+  // through, but is still correct data-wise. sheetName/remarksCol: where
+  // the Remarks column of the active sheet lives, both forms need it.
+  // remarksEdits maps a record's recKey ("sheet|row", see pie.js
+  // flattenItems) to its edited Remarks text.
+  originalBytes:null, wb:null, sheetName:"", remarksCol:null, remarksEdits:new Map()
 };
 export function activeSheet(){ return state.sheet; }
 
